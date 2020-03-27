@@ -24,7 +24,7 @@ bool getCharacteristic(BLERemoteCharacteristic** pRemoteCharacteristic, BLERemot
     if (*pRemoteCharacteristic == nullptr) 
     {
         SerialPrint(DEBUG, "Failed to find our characteristic for UUID: ");
-        SerialPrintln(DEBUG, modelUUID.toString().c_str());
+        SerialPrintln(DEBUG, uuid.toString().c_str());
         return false;
     }
     return true;
