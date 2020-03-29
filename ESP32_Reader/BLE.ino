@@ -59,19 +59,19 @@ bool writeValue(std::string caller, BLERemoteCharacteristic* pRemoteCharacterist
  */
 bool registerForNotification(notify_callback _callback, BLERemoteCharacteristic *pBLERemoteCharacteristic)
 {
-    if (pBLERemoteCharacteristic->canNotify())                                                                          // Check if the characteristic has the potential to notify.
+    //if (pBLERemoteCharacteristic->canNotify())                                                                          // Check if the characteristic has the potential to notify.
     {
         pBLERemoteCharacteristic->registerForNotify(_callback);
         SerialPrint(DEBUG, " - Registered for notify on UUID: ");
         SerialPrintln(DEBUG, pBLERemoteCharacteristic->getUUID().toString().c_str());
         return true;
     }
-    else
+    /*else
     {
         SerialPrint(ERROR, " - Notify NOT available for UUID: ");
         SerialPrintln(ERROR, pBLERemoteCharacteristic->getUUID().toString().c_str());
     }
-    return false;
+    return false;*/
 }
 
 /**
@@ -100,17 +100,17 @@ bool registerForNotificationAndIndication(notify_callback _callback, BLERemoteCh
  */
 bool registerForIndication(notify_callback _callback, BLERemoteCharacteristic *pBLERemoteCharacteristic)
 {
-    if (pBLERemoteCharacteristic->canIndicate())
+    //if (pBLERemoteCharacteristic->canIndicate())
     {
         pBLERemoteCharacteristic->registerForNotify(_callback, false);                                                  // false = indication, true = notification
         SerialPrint(DEBUG, " - Registered for indicate on UUID: ");
         SerialPrintln(DEBUG, pBLERemoteCharacteristic->getUUID().toString().c_str());
         return true;
     }
-    else
+    /*else
     {
         SerialPrint(ERROR, " - Indicate NOT available for UUID: ");
         SerialPrintln(ERROR, pBLERemoteCharacteristic->getUUID().toString().c_str());
     }
-    return false;
+    return false;*/
 }

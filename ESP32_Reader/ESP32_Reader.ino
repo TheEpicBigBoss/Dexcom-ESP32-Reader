@@ -204,7 +204,8 @@ bool connectToTransmitter()
     getCharacteristic(&pRemoteFirmware, pRemoteServiceInfos, firmwareUUID);
     SerialPrintln(DEBUG, " - Found our characteristics");
 
-    registerForIndication(indicateAuthCallback, pRemoteAuthentication);                                                 // We only register for the Auth characteristic. When we are authorised we can register for the other characteristics.
+    registerForNotification(indicateAuthCallback, pRemoteAuthentication);
+    //registerForIndication(indicateAuthCallback, pRemoteAuthentication);                                                 // We only register for the Auth characteristic. When we are authorised we can register for the other characteristics.
     return true;
 }
 
