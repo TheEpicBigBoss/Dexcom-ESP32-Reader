@@ -312,7 +312,22 @@ bool run()
     if(!requestBond())                                                                                                  // Enable encryption and requesting bonding.
         ExitState("Error while trying to bond!");
 
-    registerForIndication(indicateControlCallback, pRemoteControl);                                                     // Now register to receive new data on the control characteristic.
+
+    if (pRemoteControl->canNotify())
+        SerialPrintln(DEBUG, "Can Notify on Control.");
+    else
+        SerialPrintln(ERROR, "Can NOT Notify on Control.");
+    
+    if (pRemoteControl->canIndicate())
+        SerialPrintln(DEBUG, "Can Indicate on Control.");
+    else
+        SerialPrintln(ERROR, "Can NOT Indicate on Control.");
+
+    
+    const uint8_t bothOn3[]         = {0x3, 0x0};
+    pRemoteControl->registerForNotify(indicateControlCallback, false);
+    pRemoteControl->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn3, 2, true);
+    //registerForIndication(indicateControlCallback, pRemoteControl);                                                     // Now register to receive new data on the control characteristic.
 
     //Reading Time
     if(!readTimeMessage())
