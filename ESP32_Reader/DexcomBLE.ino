@@ -52,6 +52,7 @@ std::string AuthWaitToReceiveValue()
             return returnValue;
         }
     }
+    ExitState("Error timeout in AuthWaitToReceiveValue");                                                               // The transmitter disconnected so exit.
     return NULL;
 }
 
@@ -71,5 +72,6 @@ std::string ControlWaitToReceiveValue()
             return returnValue;
         }
     }
+    ExitState("Error timeout in ControlWaitToReceiveValue");                                                            // The transmitter disconnected so exit.
     return NULL;
 }

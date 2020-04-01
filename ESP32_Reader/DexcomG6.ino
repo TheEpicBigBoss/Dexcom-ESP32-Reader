@@ -15,7 +15,8 @@
 bool authenticate()
 {
     //Send AuthRequestTxMessage
-    std::string authRequestTxMessage = {0x01, 0x19, 0xF3, 0x89, 0xF8, 0xB7, 0x58, 0x41, 0x33, 0x02 };                   // 10byte, first byte = opcode (fix), [1] - [8] random bytes as challenge for the transmitter to encrypt, last byte 0x02 = normal bt channel, 0x01 alternative bt channel
+    std::string authRequestTxMessage = {0x01, 0x19, 0xF3, 0x89, 0xF8, 0xB7, 0x58, 0x41, 0x33 };  //0x02                 // 10byte, first byte = opcode (fix), [1] - [8] random bytes as challenge for the transmitter to encrypt,
+    authRequestTxMessage += useAlternativeChannel ? 0x01 : 0x02;                                                        // last byte 0x02 = normal bt channel, 0x01 alternative bt channel
     AuthSendValue(authRequestTxMessage);
 
     //Recv AuthChallengeRXMessage

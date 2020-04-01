@@ -31,9 +31,10 @@ static BLEUUID deviceInformationServiceUUID("180A");                            
 // The characteristic of the remote serviceUUID service we are interested in.
 static BLEUUID  communicationUUID("F8083533-849E-531C-C594-30F1F86A4EA5"); // NOTIFY, READ
 static BLEUUID        controlUUID("F8083534-849E-531C-C594-30F1F86A4EA5"); // INDICATE, WRITE
-static BLEUUID authenticationUUID("F8083535-849E-531C-C594-30F1F86A4EA5"); // INDICATE, READ, WRITE
-static BLEUUID       backfillUUID("F8083536-849E-531C-C594-30F1F86A4EA5"); // NOTIFY, READ, WRITE
+static BLEUUID authenticationUUID("F8083535-849E-531C-C594-30F1F86A4EA5"); // INDICATE, READ, WRITE (G6 Plus INDICATE / WRITE)
+static BLEUUID       backfillUUID("F8083536-849E-531C-C594-30F1F86A4EA5"); // NOTIFY, READ, WRITE (G6 Plus NOTIFY)
 //static BLEUUID          xxxUUID("F8083537-849E-531C-C594-30F1F86A4EA5"); // READ
+//static BLEUUID          yyyUUID("F8083538-849E-531C-C594-30F1F86A4EA5"); // NOTIFY, READ (G6 Plus only)
 // The general characteristic of the device information service.
 static BLEUUID manufacturerUUID("2A29"); // READ
 static BLEUUID        modelUUID("2A24"); // READ
@@ -41,7 +42,7 @@ static BLEUUID     firmwareUUID("2A26"); // READ
 
 
 static std::string transmitterID = "***REMOVED***";              /* Set here your transmitter ID */                            // This transmitter ID is used to identify our transmitter if multiple dexcom transmitters are found.
-
+static boolean useAlternativeChannel = true;      /* Enable when used concurrently with xDrip / Dexcom CGM */           // Tells the transmitter to use the alternative bt channel.
 static volatile boolean connected = false;                                                                              // Indicates if the ble client is connected to the transmitter.
 static boolean bonding = false;                                                                                         // Gets set by Auth handshake "StatusRXMessage" and shows if the transmitter would like to bond with the client.
 
@@ -203,9 +204,25 @@ bool connectToTransmitter()
     getCharacteristic(&pRemoteModel, pRemoteServiceInfos, modelUUID);
     getCharacteristic(&pRemoteFirmware, pRemoteServiceInfos, firmwareUUID);
     SerialPrintln(DEBUG, " - Found our characteristics");
+    
 
-    registerForNotification(indicateAuthCallback, pRemoteAuthentication);
+    if (pRemoteAuthentication->canNotify())
+        SerialPrintln(DEBUG, "Can Notify on Auth.");
+    else
+        SerialPrintln(ERROR, "Can NOT Notify on Auth.");
+    
+    if (pRemoteAuthentication->canIndicate())
+        SerialPrintln(DEBUG, "Can Indicate on Auth.");
+    else
+        SerialPrintln(ERROR, "Can NOT Indicate on Auth.");
+
+
+    const uint8_t bothOn2[]         = {0x3, 0x0};
+    pRemoteAuthentication->registerForNotify(indicateAuthCallback, false);
+    pRemoteAuthentication->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn2, 2, true);
     //registerForIndication(indicateAuthCallback, pRemoteAuthentication);                                                 // We only register for the Auth characteristic. When we are authorised we can register for the other characteristics.
+
+    //Vielleicht mus bei neurern transmitter schon am anfang alle Chracteristics abboniert werden
     return true;
 }
 
@@ -269,25 +286,31 @@ void setup()
 }
 
 /**
+ * This function can be called in an error case to exit and go to sleep.
+ */
+void ExitState(std::string message)
+{
+    SerialPrintln(ERROR, message.c_str());
+    sleepHibernation();                                                                                                 // Exit by going into deep sleep.
+}
+/**
  * This method will perform a full transmitter connect and read data.
  */
 bool run()
 {
     if (!connectToTransmitter())                                                                                        // Connect to the found transmitter.
-    {
-        SerialPrintln(ERROR, "We have failed to connect to the transmitter!");
-        return false;
-    }
-    SerialPrintln(DEBUG, "We are now connected to the transmitter.");
+        ExitState("We have failed to connect to the transmitter!");
+    else
+        SerialPrintln(DEBUG, "We are now connected to the transmitter.");
 
     if(!readDeviceInformations())                                                                                       // Read the general device informations like model no. and manufacturer.
         SerialPrintln(DEBUG, "Error while reading device informations!");
 
     if(!authenticate())                                                                                                 // Authenticate with the transmitter.
-        SerialPrintln(DEBUG, "Error while trying to authenticate!");
+        ExitState("Error while trying to authenticate!");
 
     if(!requestBond())                                                                                                  // Enable encryption and requesting bonding.
-        SerialPrintln(DEBUG, "Error while trying to bond!");
+        ExitState("Error while trying to bond!");
 
     registerForIndication(indicateControlCallback, pRemoteControl);                                                     // Now register to receive new data on the control characteristic.
 
@@ -307,7 +330,6 @@ bool run()
 
     if(!readLastCalibration())
         SerialPrintln(DEBUG, "Can't read last calibration data!");
-    //TODO make Serial.print mode: ALL, NONE, ONLYGLUCOSE (shows only one line with glucose or error)
 
     //Let the Transmitter close the connection.
     sendDisconnect();
