@@ -75,24 +75,15 @@ bool registerForNotification(notify_callback _callback, BLERemoteCharacteristic 
 }
 
 /**
- * Register for notification AND indication, also check if both are available.
+ * Register for notification AND indication, without checking.
  */
 bool registerForNotificationAndIndication(notify_callback _callback, BLERemoteCharacteristic *pBLERemoteCharacteristic)
 {
-    if (pBLERemoteCharacteristic->canNotify() && pBLERemoteCharacteristic->canIndicate()) 
-    {
-        pBLERemoteCharacteristic->registerForNotify(_callback);
-        pBLERemoteCharacteristic->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn, 2, true);     // Manually set the bytes because there is no such funktion to set both.
-        SerialPrint(DEBUG, " - Registered for indicate and Notify on UUID: ");
-        SerialPrintln(DEBUG, pBLERemoteCharacteristic->getUUID().toString().c_str());
-        return true;
-    }
-    else
-    {
-        SerialPrint(ERROR, " - Indicate with Notify NOT available for UUID: ");
-        SerialPrintln(ERROR, pBLERemoteCharacteristic->getUUID().toString().c_str());
-    }
-    return false;
+    pBLERemoteCharacteristic->registerForNotify(_callback, false);                                                      // Register for indication (because this is the correct one)
+    pBLERemoteCharacteristic->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn, 2, true);         // True to wait for acknowledge, set to both, manually set the bytes because there is no such funktion to set both.
+    SerialPrint(DEBUG, " - FORCE registered for indicate and notify on UUID: ");
+    SerialPrintln(DEBUG, pBLERemoteCharacteristic->getUUID().toString().c_str());
+    return true;
 }
 
 /**

@@ -204,25 +204,9 @@ bool connectToTransmitter()
     getCharacteristic(&pRemoteModel, pRemoteServiceInfos, modelUUID);
     getCharacteristic(&pRemoteFirmware, pRemoteServiceInfos, firmwareUUID);
     SerialPrintln(DEBUG, " - Found our characteristics");
-    
 
-    if (pRemoteAuthentication->canNotify())
-        SerialPrintln(DEBUG, "Can Notify on Auth.");
-    else
-        SerialPrintln(ERROR, "Can NOT Notify on Auth.");
-    
-    if (pRemoteAuthentication->canIndicate())
-        SerialPrintln(DEBUG, "Can Indicate on Auth.");
-    else
-        SerialPrintln(ERROR, "Can NOT Indicate on Auth.");
-
-
-    const uint8_t bothOn2[]         = {0x3, 0x0};
-    pRemoteAuthentication->registerForNotify(indicateAuthCallback, false);
-    pRemoteAuthentication->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn2, 2, true);
-    //registerForIndication(indicateAuthCallback, pRemoteAuthentication);                                                 // We only register for the Auth characteristic. When we are authorised we can register for the other characteristics.
-
-    //Vielleicht mus bei neurern transmitter schon am anfang alle Chracteristics abboniert werden
+    registerForNotificationAndIndication(indicateAuthCallback, pRemoteAuthentication);                                  // Needed to work with G6 Plus (and G6) sensor. The command below only works for G6 (81...) transmitter.
+    //registerForIndication(indicateAuthCallback, pRemoteAuthentication);                                               // We only register for the Auth characteristic. When we are authorised we can register for the other characteristics.
     return true;
 }
 
@@ -311,23 +295,9 @@ bool run()
 
     if(!requestBond())                                                                                                  // Enable encryption and requesting bonding.
         ExitState("Error while trying to bond!");
-
-
-    if (pRemoteControl->canNotify())
-        SerialPrintln(DEBUG, "Can Notify on Control.");
-    else
-        SerialPrintln(ERROR, "Can NOT Notify on Control.");
     
-    if (pRemoteControl->canIndicate())
-        SerialPrintln(DEBUG, "Can Indicate on Control.");
-    else
-        SerialPrintln(ERROR, "Can NOT Indicate on Control.");
 
-    
-    const uint8_t bothOn3[]         = {0x3, 0x0};
-    pRemoteControl->registerForNotify(indicateControlCallback, false);
-    pRemoteControl->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn3, 2, true);
-    //registerForIndication(indicateControlCallback, pRemoteControl);                                                     // Now register to receive new data on the control characteristic.
+    registerForNotificationAndIndication(indicateControlCallback, pRemoteControl);                                      // Now register to receive new data on the control characteristic.
 
     //Reading Time
     if(!readTimeMessage())
@@ -346,6 +316,11 @@ bool run()
     if(!readLastCalibration())
         SerialPrintln(DEBUG, "Can't read last calibration data!");
 
+
+    registerForNotification(notifyBackfillCallback, pRemoteBackfill);
+
+    if(!readBackfill())
+        SerialPrintln(DEBUG, "Can't read backfill data!");
     //Let the Transmitter close the connection.
     sendDisconnect();
 }

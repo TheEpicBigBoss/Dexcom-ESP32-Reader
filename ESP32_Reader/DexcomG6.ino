@@ -171,10 +171,10 @@ bool readGlucose()
         return false;
 
     uint8_t status = (uint8_t)glucoseRxMessage[1];
-    uint32_t sequence = (uint32_t)(glucoseRxMessage[2] + 
-                                   glucoseRxMessage[3]*0x100  + 
-                                   glucoseRxMessage[4]*0x10000 + 
-                                   glucoseRxMessage[5]*0x1000000);
+    uint32_t sequence  = (uint32_t)(glucoseRxMessage[2] + 
+                                    glucoseRxMessage[3]*0x100  + 
+                                    glucoseRxMessage[4]*0x10000 + 
+                                    glucoseRxMessage[5]*0x1000000);
     uint32_t timestamp = (uint32_t)(glucoseRxMessage[6] + 
                                     glucoseRxMessage[7]*0x100  + 
                                     glucoseRxMessage[8]*0x10000 + 
@@ -217,13 +217,13 @@ bool readSensor()
     if (sensorRxMessage.length() > 8)
     {
         uint32_t unfiltered = (uint32_t)(sensorRxMessage[6] + 
-                                        sensorRxMessage[7]*0x100  + 
-                                        sensorRxMessage[8]*0x10000 + 
-                                        sensorRxMessage[9]*0x1000000);
-        uint32_t filtered = (uint32_t)(sensorRxMessage[10] + 
-                                        sensorRxMessage[11]*0x100  + 
-                                        sensorRxMessage[12]*0x10000 + 
-                                        sensorRxMessage[13]*0x1000000);
+                                         sensorRxMessage[7]*0x100  + 
+                                         sensorRxMessage[8]*0x10000 + 
+                                         sensorRxMessage[9]*0x1000000);
+        uint32_t filtered   = (uint32_t)(sensorRxMessage[10] + 
+                                         sensorRxMessage[11]*0x100  + 
+                                         sensorRxMessage[12]*0x10000 + 
+                                         sensorRxMessage[13]*0x1000000);
         if (transmitterID[0] == 8)                                                                                      // G6 Transmitter
         {
                 int g6Scale = 34;
@@ -249,8 +249,7 @@ bool readLastCalibration()
         (calibrationDataRxMessage[0] != 0x33)) 
     return false;
 
-
-    uint16_t glucose = (uint32_t)(calibrationDataRxMessage[11] + calibrationDataRxMessage[12]*0x100);
+    uint16_t glucose   = (uint32_t)(calibrationDataRxMessage[11] + calibrationDataRxMessage[12]*0x100);
     uint32_t timestamp = (uint32_t)(calibrationDataRxMessage[13] + 
                                     calibrationDataRxMessage[14]*0x100  + 
                                     calibrationDataRxMessage[15]*0x10000 + 
@@ -259,6 +258,61 @@ bool readLastCalibration()
     SerialPrintf(DATA, "Calibration - Timestamp: %d\n", timestamp);
 
   return true;
+}
+
+/**
+ * Reads the last glucose values from the transmitter when the esp was not connected.
+ */
+bool readBackfill()
+{
+    std::string backfillTxMessage = {0x50, 0x05, 0x02, 0x00};                                                           // 18 + 2 byte crc = 20 byte
+    //this.data.writeUInt32LE(timestampStart, 4);
+    int backfill_start; // in seconds
+    int backfill_end; // in seconds
+    backfillTxMessage += {0x00, 0x00, 0x00, 0x00};
+    //this.data.writeUInt32LE(timestampEnd, 8);
+    backfillTxMessage += {0x45, 0x75, 0x0e, 0x00}; //Set by time 
+
+    backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};                                                          // Fill up to 18 byte
+    backfillTxMessage += CRC_16_XMODEM(backfillTxMessage);                                                              // Add crc 16
+
+    ControlSendValue(backfillTxMessage);
+    std::string backfillRxMessage = ControlWaitToReceiveValue();
+    if(backfillRxMessage.length() != 20)
+    {
+        backfillRxMessage = {0x51, 0x83, 0x01, 0x01, 0xc0, 0x03, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x4c, 0x54, 0xda, 0xe4};
+        SerialPrintln(DEBUG, "WARNING Emulating backfillRxMessage!!!!");
+    }
+    
+    if (backfillRxMessage.length() != 20 || backfillRxMessage[0] != 0x51)
+        return false;
+
+    uint8_t status         = (uint8_t)backfillRxMessage[1];
+    uint8_t backFillStatus = (uint8_t)backfillRxMessage[2];
+    uint8_t identifier     = (uint8_t)backfillRxMessage[3];
+    uint8_t timestampStart = (uint32_t)(backfillRxMessage[4] + 
+                                        backfillRxMessage[5]*0x100  + 
+                                        backfillRxMessage[6]*0x10000 + 
+                                        backfillRxMessage[7]*0x1000000);
+    uint8_t timestampEnd   = (uint32_t)(backfillRxMessage[8] + 
+                                        backfillRxMessage[9]*0x100  + 
+                                        backfillRxMessage[10]*0x10000 + 
+                                        backfillRxMessage[11]*0x1000000);
+    SerialPrintf(DATA, "Backfill - Status:          %d\n", status);
+    SerialPrintf(DATA, "Backfill - Backfill Status: %d\n", backFillStatus);
+    SerialPrintf(DATA, "Backfill - Identifier:      %d\n", identifier);
+    SerialPrintf(DATA, "Backfill - Timestamp Start: %d\n", timestampStart);
+    SerialPrintf(DATA, "Backfill - Timestamp End:   %d\n", timestampEnd);
+
+
+    //emulate callback
+    uint8_t testResponse[] = {0x22, 0x55, 0x88, 0x69};
+    SerialPrintln(DEBUG, "Emulating Backfill Characteristic Callback");
+    //printHexString(uint8ToString(testResponse, (sizeof(testResponse) / sizeof(testResponse[0]))));
+    notifyBackfillCallback(NULL, testResponse, (sizeof(testResponse) / sizeof(testResponse[0])), true);
+
+    //CRC_16_XMODEM({0x50, 0x05, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x45, 0x75, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}); is 0f e8
+    return true;
 }
 
 /**

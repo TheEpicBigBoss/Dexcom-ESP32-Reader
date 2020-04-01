@@ -7,6 +7,7 @@
 
 #include "BLEDevice.h"
 #include "BLEScan.h"
+#include "rom/crc.h"
 #include "Output.h"
 
 /**
@@ -48,6 +49,21 @@ std::string uint8ToString(uint8_t *data, size_t length)
     return value;
 }
 
+/**
+ * 
+ */
+std::string CRC_16_XMODEM(std::string message)
+{
+    uint16_t crc = ~crc16_be((uint16_t)~0x0000, reinterpret_cast<const uint8_t*>(&message[0]), message.length());       // calculate crc 16 xmodem 
+    std::string crcString = { (uint8_t)crc, (uint8_t)(crc >> 8) };
 
-
-
+    SerialPrint(DEBUG, "CRC_16_XMODEM of ");
+    for (int i = 0; i < message.length(); i++)
+    {
+        SerialPrint(DEBUG, (uint8_t)message[i], HEX);
+        SerialPrint(DEBUG, " ");
+    }
+    SerialPrint(DEBUG, "is ");
+    printHexString(crcString);
+    return crcString;
+}
