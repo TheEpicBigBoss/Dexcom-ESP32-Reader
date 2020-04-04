@@ -249,7 +249,7 @@ bool readLastCalibration()
         (calibrationDataRxMessage[0] != 0x33)) 
     return false;
 
-    uint16_t glucose   = (uint32_t)(calibrationDataRxMessage[11] + calibrationDataRxMessage[12]*0x100);
+    uint16_t glucose   = (uint16_t)(calibrationDataRxMessage[11] + calibrationDataRxMessage[12]*0x100);
     uint32_t timestamp = (uint32_t)(calibrationDataRxMessage[13] + 
                                     calibrationDataRxMessage[14]*0x100  + 
                                     calibrationDataRxMessage[15]*0x10000 + 
@@ -271,16 +271,19 @@ bool readBackfill()
     int backfill_end; // in seconds
     backfillTxMessage += {0x00, 0x00, 0x00, 0x00};
     //this.data.writeUInt32LE(timestampEnd, 8);
-    backfillTxMessage += {0x45, 0x75, 0x0e, 0x00}; //Set by time 
+    backfillTxMessage += {0xe6, 0x5c, 0x12, 0x00}; //Set by time 
 
-    backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};                                                          // Fill up to 18 byte
+    backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0xe8, 0xdd};                                                          // Fill up to 18 byte
     backfillTxMessage += CRC_16_XMODEM(backfillTxMessage);                                                              // Add crc 16
 
     ControlSendValue(backfillTxMessage);
     std::string backfillRxMessage = ControlWaitToReceiveValue();
+
+
     if(backfillRxMessage.length() != 20)
     {
-        backfillRxMessage = {0x51, 0x83, 0x01, 0x01, 0xc0, 0x03, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x4c, 0x54, 0xda, 0xe4};
+        //backfillRxMessage = {0x51, 0x83, 0x01, 0x01, 0xc0, 0x03, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x4c, 0x54, 0xda, 0xe4};
+        backfillRxMessage = {0x51, 0x83, 0x01, 0x02, 0xc0, 0x03, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x3c, 0xbb, 0x67, 0x03};
         SerialPrintln(DEBUG, "WARNING Emulating backfillRxMessage!!!!");
     }
     
@@ -290,14 +293,14 @@ bool readBackfill()
     uint8_t status         = (uint8_t)backfillRxMessage[1];
     uint8_t backFillStatus = (uint8_t)backfillRxMessage[2];
     uint8_t identifier     = (uint8_t)backfillRxMessage[3];
-    uint8_t timestampStart = (uint32_t)(backfillRxMessage[4] + 
-                                        backfillRxMessage[5]*0x100  + 
-                                        backfillRxMessage[6]*0x10000 + 
-                                        backfillRxMessage[7]*0x1000000);
-    uint8_t timestampEnd   = (uint32_t)(backfillRxMessage[8] + 
-                                        backfillRxMessage[9]*0x100  + 
-                                        backfillRxMessage[10]*0x10000 + 
-                                        backfillRxMessage[11]*0x1000000);
+    uint32_t timestampStart = (uint32_t)(backfillRxMessage[4] + 
+                                         backfillRxMessage[5]*0x100  + 
+                                         backfillRxMessage[6]*0x10000 + 
+                                         backfillRxMessage[7]*0x1000000);
+    uint32_t timestampEnd   = (uint32_t)(backfillRxMessage[8] + 
+                                         backfillRxMessage[9]*0x100  + 
+                                         backfillRxMessage[10]*0x10000 + 
+                                         backfillRxMessage[11]*0x1000000);
     SerialPrintf(DATA, "Backfill - Status:          %d\n", status);
     SerialPrintf(DATA, "Backfill - Backfill Status: %d\n", backFillStatus);
     SerialPrintf(DATA, "Backfill - Identifier:      %d\n", identifier);
@@ -306,13 +309,54 @@ bool readBackfill()
 
 
     //emulate callback
-    uint8_t testResponse[] = {0x22, 0x55, 0x88, 0x69};
+    uint8_t testResponse[] = {0x01, 0x80, 0x01, 0x00, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0c, 0x00, 0x12, 0x7f};
     SerialPrintln(DEBUG, "Emulating Backfill Characteristic Callback");
     //printHexString(uint8ToString(testResponse, (sizeof(testResponse) / sizeof(testResponse[0]))));
     notifyBackfillCallback(NULL, testResponse, (sizeof(testResponse) / sizeof(testResponse[0])), true);
 
-    //CRC_16_XMODEM({0x50, 0x05, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x45, 0x75, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}); is 0f e8
     return true;
+}
+
+/**
+ * This method parses the backfill data received from the backfill characteristic callback.
+ */
+bool parseBackfill(std::string backfillParseMessage)
+{
+    if (backfillParseMessage.length() != 14)
+        return false;
+
+    uint8_t sequence   = (uint8_t)backfillParseMessage[0];
+    uint8_t identifier = (uint8_t)backfillParseMessage[1];
+
+    if(sequence == 1)
+    {
+        uint16_t backfillRequestCounter = (uint16_t)(backfillParseMessage[2] + backfillParseMessage[3]*0x100);
+        uint16_t unknown                = (uint16_t)(backfillParseMessage[4] + backfillParseMessage[5]*0x100);
+        SerialPrintln(DATA, "Backfill Data - Sequence:        1 (start package)");
+        SerialPrintf(DATA,  "Backfill Data - Identifier:      %d\n", identifier);
+        SerialPrintf(DATA,  "Backfill Data - Request Counter: %d\n", backfillRequestCounter);
+        SerialPrintf(DATA,  "Backfill Data - Unknown:         %d\n", unknown);
+    }
+    else
+    {
+        /* code */
+    }
+    
+    std::string data = backfillParseMessage.substr(6,8);
+
+    uint32_t dextime = (uint32_t)(data[0] + 
+                                  data[1]*0x100  + 
+                                  data[2]*0x10000 + 
+                                  data[3]*0x1000000);
+    //const time = this.activationDate.getTime() + dextime * 1000;
+    uint16_t glucose = (uint16_t)(data[4] + data[5]*0x100);
+    uint8_t type     = (uint8_t)data[6];
+    uint8_t trend    = (uint8_t)data[7];
+    SerialPrintf(DATA,  "Backfill Glucose - Dextime: %d\n", dextime);
+    //SerialPrintf(DATA,  "Backfill Glucose - Time:    %d\n", time);
+    SerialPrintf(DATA,  "Backfill Glucose - Glucose: %d\n", glucose);
+    SerialPrintf(DATA,  "Backfill Glucose - Type:    %d\n", type);
+    SerialPrintf(DATA,  "Backfill Glucose - Trend:   %d\n", trend);
 }
 
 /**

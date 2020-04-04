@@ -153,6 +153,8 @@ static void notifyBackfillCallback(BLERemoteCharacteristic* pBLERemoteCharacteri
 {
     SerialPrintf(DEBUG, "notifyBackfillCallback - read %d byte data: ", length);
     printHexArray(pData, length);
+    if(!parseBackfill(uint8ToString(pData, length)))
+        SerialPrintln(ERROR, "Can't parse this backfill data!");
 }
 
 /**
@@ -301,26 +303,32 @@ bool run()
 
     //Reading Time
     if(!readTimeMessage())
-        SerialPrintln(DEBUG, "Error reading Time Message!");
+        SerialPrintln(ERROR, "Error reading Time Message!");
     
     if(!readBatteryStatus())
-        SerialPrintln(DEBUG, "Can't read Battery Status!");
+        SerialPrintln(ERROR, "Can't read Battery Status!");
 
     //Read glucose values
     if(!readGlucose())
-        SerialPrintln(DEBUG, "Can't read Glucose!");
+        SerialPrintln(ERROR, "Can't read Glucose!");
 
     if(!readSensor())
-        SerialPrintln(DEBUG, "Can't read raw Sensor values!");
+        SerialPrintln(ERROR, "Can't read raw Sensor values!");
 
     if(!readLastCalibration())
-        SerialPrintln(DEBUG, "Can't read last calibration data!");
+        SerialPrintln(ERROR, "Can't read last calibration data!");
 
 
-    registerForNotification(notifyBackfillCallback, pRemoteBackfill);
+    const uint8_t notificationOn33[] = {0x1, 0x0};
+    const uint8_t bothOn33[]         = {0x3, 0x0};
+    pRemoteBackfill->registerForNotify(notifyBackfillCallback, true); 
+    pRemoteBackfill->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn33, 2, true);
+    //registerForNotification(notifyBackfillCallback, pRemoteBackfill);
+
+
 
     if(!readBackfill())
-        SerialPrintln(DEBUG, "Can't read backfill data!");
+        SerialPrintln(ERROR, "Can't read backfill data!");
     //Let the Transmitter close the connection.
     sendDisconnect();
 }
