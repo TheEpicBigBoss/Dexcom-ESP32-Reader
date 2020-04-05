@@ -66,15 +66,8 @@ bool requestBond()
 {
     if(bonding)
     {
-        BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);                                                             // Enable security encryption.
-        BLEDevice::setSecurityCallbacks(new MySecurity());
-
-        BLESecurity *pSecurity = new BLESecurity();
-        pSecurity->setKeySize();
-        pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_ONLY);
-        pSecurity->setCapability(ESP_IO_CAP_IO);
-        pSecurity->setRespEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
-
+        setup_bonding();                                                                                                // Enable bonding.
+        
         SerialPrintln(DEBUG, "Sending Bond Request.");
         //Send KeepAliveTxMessage
         std::string keepAliveTxMessage = {0x06, 0x19};                                                                  // Opcode 2 byte = 0x06, 25 as hex (0x19)
@@ -84,7 +77,7 @@ bool requestBond()
         AuthSendValue(bondRequestTxMessage);
         //Wait for bonding to finish
         SerialPrintln(DEBUG, "Waiting for bond.");
-        while (bondingFinished == false);                                                                               //Barrier waits until bonding has finished, IMPORTANT to set the bondingFinished variable to sig_atomic_t OR volatile
+        while (bondingFinished == false);                                                                               // Barrier waits until bonding has finished, IMPORTANT to set the bondingFinished variable to sig_atomic_t OR volatile
         //Wait
         SerialPrintln(DEBUG, "Bonding finished.");
         return true;
@@ -96,6 +89,7 @@ bool requestBond()
     }
 }
 
+uint32_t transmitterStartTime;
 /**
  * Read the time information from the transmitter.
  */
@@ -117,10 +111,11 @@ bool readTimeMessage()
                                            transmitterTimeRxMessage[8]*0x10000 + 
                                            transmitterTimeRxMessage[9]*0x1000000);
     SerialPrintf(DATA, "Time - Status:              %d\n", status);
-    SerialPrintf(DATA, "Time - since activation:    %d (%d days, %d hours)\n", currentTime,                                  // Activation date is now() - currentTime * 1000
+    SerialPrintf(DATA, "Time - since activation:    %d (%d days, %d hours)\n", currentTime,                             // Activation date is now() - currentTime * 1000
                                                                          currentTime / (60*60*24),                      // Days round down
                                                                          (currentTime / (60*60)) % 24);                 // Remaining hours
-    SerialPrintf(DATA, "Time - since session start: %d\n", sessionStartTime);                                                // Session start = Activation date + sessionStartTime * 1000
+    SerialPrintf(DATA, "Time - since session start: %d\n", sessionStartTime);                                           // Session start = Activation date + sessionStartTime * 1000
+    transmitterStartTime = currentTime;
     return true;
 }
 
@@ -265,20 +260,26 @@ bool readLastCalibration()
  */
 bool readBackfill()
 {
-    std::string backfillTxMessage = {0x50, 0x05, 0x02, 0x00};                                                           // 18 + 2 byte crc = 20 byte
-    //this.data.writeUInt32LE(timestampStart, 4);
-    int backfill_start; // in seconds
-    int backfill_end; // in seconds
-    backfillTxMessage += {0x00, 0x00, 0x00, 0x00};
-    //this.data.writeUInt32LE(timestampEnd, 8);
-    backfillTxMessage += {0xe6, 0x5c, 0x12, 0x00}; //Set by time 
+    std::string backfillTxMessage = {0x50, 0x5, 0x2, 0x0};                                                              // 18 + 2 byte crc = 20 byte
+    uint32_t backfill_start = transmitterStartTime - 60 * 60;                                                           // One hour ago.
+    uint32_t backfill_end   = transmitterStartTime - 60;                                                                // One minute ago to not request current glucose value.
 
-    backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0xe8, 0xdd};                                                          // Fill up to 18 byte
+    /*backfillTxMessage += {uint8_t(backfill_start>>0)};
+    backfillTxMessage += {uint8_t(backfill_start>>8)};
+    backfillTxMessage += {uint8_t(backfill_start>>16)};
+    backfillTxMessage += {uint8_t(backfill_start>>24)};*/
+    backfillTxMessage += {0x00, 0x00, 0x00, 0x00}; 
+
+    backfillTxMessage += {uint8_t(backfill_end>>0)};
+    backfillTxMessage += {uint8_t(backfill_end>>8)};
+    backfillTxMessage += {uint8_t(backfill_end>>16)};
+    backfillTxMessage += {uint8_t(backfill_end>>24)};
+
+    backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};                                                          // Fill up to 18 byte
     backfillTxMessage += CRC_16_XMODEM(backfillTxMessage);                                                              // Add crc 16
 
     ControlSendValue(backfillTxMessage);
     std::string backfillRxMessage = ControlWaitToReceiveValue();
-
 
     if(backfillRxMessage.length() != 20)
     {

@@ -105,3 +105,18 @@ bool registerForIndication(notify_callback _callback, BLERemoteCharacteristic *p
     }
     return false;
 }
+
+/**
+ * Enables BLE bonding.
+ */
+bool setup_bonding()
+{
+    BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);                                                                 // Enable security encryption.
+    BLEDevice::setSecurityCallbacks(new MySecurity());
+
+    BLESecurity *pSecurity = new BLESecurity();
+    pSecurity->setKeySize();
+    pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_ONLY);
+    pSecurity->setCapability(ESP_IO_CAP_IO);
+    pSecurity->setRespEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
+}
