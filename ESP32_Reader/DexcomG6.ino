@@ -267,11 +267,10 @@ bool readBackfill()
     backfillTxMessage += {uint8_t(backfill_start>>16)};
     backfillTxMessage += {uint8_t(backfill_start>>24)};
 
-    /*backfillTxMessage += {uint8_t(backfill_end>>0)};
+    backfillTxMessage += {uint8_t(backfill_end>>0)};
     backfillTxMessage += {uint8_t(backfill_end>>8)};
     backfillTxMessage += {uint8_t(backfill_end>>16)};
-    backfillTxMessage += {uint8_t(backfill_end>>24)};*/
-    backfillTxMessage += {0x00, 0x00, 0x00, 0x00}; 
+    backfillTxMessage += {uint8_t(backfill_end>>24)};
 
     backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};                                                          // Fill up to 18 byte
     backfillTxMessage += CRC_16_XMODEM(backfillTxMessage);                                                              // Add crc 16
@@ -281,9 +280,9 @@ bool readBackfill()
     if (backfillRxMessage.length() != 20 || backfillRxMessage[0] != 0x51)
         return false;
 
-    uint8_t status         = (uint8_t)backfillRxMessage[1];
-    uint8_t backFillStatus = (uint8_t)backfillRxMessage[2];
-    uint8_t identifier     = (uint8_t)backfillRxMessage[3];
+    uint8_t status          = (uint8_t)backfillRxMessage[1];
+    uint8_t backFillStatus  = (uint8_t)backfillRxMessage[2];
+    uint8_t identifier      = (uint8_t)backfillRxMessage[3];
     uint32_t timestampStart = (uint32_t)(backfillRxMessage[4] + 
                                          backfillRxMessage[5]*0x100  + 
                                          backfillRxMessage[6]*0x10000 + 
@@ -298,21 +297,18 @@ bool readBackfill()
     SerialPrintf(DATA, "Backfill - Timestamp Start: %d\n", timestampStart);
     SerialPrintf(DATA, "Backfill - Timestamp End:   %d\n", timestampEnd);
 
-
-    //emulate callback
-    SerialPrintln(DEBUG, "Emulating Backfill Characteristic Callback");
-    uint8_t testResponse[] = {0x01, 0x80, 0x01, 0x00, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0c, 0x00, 0x12, 0x7f};
-    notifyBackfillCallback(NULL, testResponse, (sizeof(testResponse) / sizeof(testResponse[0])), true);
-
+    SerialPrintln(DATA, "Waiting for backfill data...");
+    delay(5*1000);                                                                                                      // Wait 5 seconds until all backfill data arrived
     return true;
 }
 
 /**
- * This method parses the backfill data received from the backfill characteristic callback.
+ * This method saves the backfill data received from the backfill characteristic callback.
  */
-bool parseBackfill(std::string backfillParseMessage)
+std::string backfillStream = "";
+bool saveBackfill(std::string backfillParseMessage)
 {
-    if (backfillParseMessage.length() != 14)
+    if (backfillParseMessage.length() < 2)                                                                              // Minimum is sequence + identifier.
         return false;
 
     uint8_t sequence   = (uint8_t)backfillParseMessage[0];
@@ -322,31 +318,41 @@ bool parseBackfill(std::string backfillParseMessage)
     {
         uint16_t backfillRequestCounter = (uint16_t)(backfillParseMessage[2] + backfillParseMessage[3]*0x100);
         uint16_t unknown                = (uint16_t)(backfillParseMessage[4] + backfillParseMessage[5]*0x100);
-        SerialPrintln(DATA, "Backfill Data - Sequence:        1 (start package)");
-        SerialPrintf(DATA,  "Backfill Data - Identifier:      %d\n", identifier);
         SerialPrintf(DATA,  "Backfill Data - Request Counter: %d\n", backfillRequestCounter);
         SerialPrintf(DATA,  "Backfill Data - Unknown:         %d\n", unknown);
+        backfillStream = backfillParseMessage.substr(6);                                                                // Empty string and set payload.
     }
     else
+        backfillStream += backfillParseMessage.substr(2);                                                               // Add data.
+    
+    SerialPrintf(DATA, "Backfill Data - Sequence: %d   Identifier: %d   Data: ", sequence, identifier);
+    printHexString(backfillParseMessage);
+
+    while(backfillStream.length() >= 8)
     {
-        /* code */
+        std::string data = backfillStream.substr(0,8);                                                                  // Get the first 8 byte.
+        if(backfillStream.length() > 8)                                                                                 // More than 8 byte?
+            backfillStream = backfillStream.substr(8);                                                                  // Trim of the first 8 byte.
+        else                                                                                                            // Exactly 8 byte:
+            backfillStream = "";                                                                                        // Empty string.
+        parseBackfill(data);
     }
     
-    std::string data = backfillParseMessage.substr(6,8);
+    return true;
+}
 
+/**
+ * This method parsed 8 bytes representing the timestamp and glucose values.
+ */
+void parseBackfill(std::string data)
+{
     uint32_t dextime = (uint32_t)(data[0] + 
-                                  data[1]*0x100  + 
-                                  data[2]*0x10000 + 
-                                  data[3]*0x1000000);
-    //const time = this.activationDate.getTime() + dextime * 1000;
+                                    data[1]*0x100  + 
+                                    data[2]*0x10000 + 
+                                    data[3]*0x1000000);
     uint16_t glucose = (uint16_t)(data[4] + data[5]*0x100);
     uint8_t type     = (uint8_t)data[6];
     uint8_t trend    = (uint8_t)data[7];
-    //SerialPrintf(DATA,  "Backfill Glucose - Dextime: %d\n", dextime);
-    //SerialPrintf(DATA,  "Backfill Glucose - Time:    %d\n", time);
-    //SerialPrintf(DATA,  "Backfill Glucose - Glucose: %d\n", glucose);
-    //SerialPrintf(DATA,  "Backfill Glucose - Type:    %d\n", type);
-    //SerialPrintf(DATA,  "Backfill Glucose - Trend:   %d\n", trend);
     SerialPrintf(DATA,  "Backfill -> Dextime: %d   Glucose: %d   Type: %d   Trend: %d   \n", dextime, glucose, type, trend);
 }
 

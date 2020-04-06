@@ -152,9 +152,7 @@ static void indicateAuthCallback(BLERemoteCharacteristic* pBLERemoteCharacterist
 }
 static void notifyBackfillCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) 
 {
-    SerialPrintf(DEBUG, "notifyBackfillCallback - read %d byte data: ", length);
-    printHexArray(pData, length);
-    if(!parseBackfill(uint8ToString(pData, length)))
+    if(!saveBackfill(uint8ToString(pData, length)))
     {
         SerialPrint(ERROR, "Can't parse this backfill data: ");
         printHexArray(pData, length);
@@ -270,9 +268,9 @@ void setup()
 
     BLEScan* pBLEScan = BLEDevice::getScan();                                                                           // Retrieve a Scanner.
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());                                          // Set the callback to informed when a new device was detected.
-    pBLEScan->setInterval(50); //100 works                                                                              // The time in ms how long each search intervall last. Important for fast scanning so we dont miss the transmitter waking up.
-    pBLEScan->setWindow(49); //60 works                                                                                 // The actual time that will be searched. Interval - Window = time the esp is doing nothing (used for energy efficiency).
-    pBLEScan->setActiveScan(true);                                                                                      // Possible source of error if we cant connect to the transmitter.
+    pBLEScan->setInterval(80); //100 works                                                                              // The time in ms how long each search intervall last. Important for fast scanning so we dont miss the transmitter waking up.
+    pBLEScan->setWindow(79); //60-99 works                                                                              // The actual time that will be searched. Interval - Window = time the esp is doing nothing (used for energy efficiency).
+    pBLEScan->setActiveScan(false);                                                                                     // Possible source of error if we cant connect to the transmitter.
 }
 
 /**

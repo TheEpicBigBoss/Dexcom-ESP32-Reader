@@ -127,4 +127,5 @@ bool setup_bonding()
     pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_ONLY);
     pSecurity->setCapability(ESP_IO_CAP_IO);
     pSecurity->setRespEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
+    SerialPrintln(DEBUG, "Enabled bonding.");
 }
