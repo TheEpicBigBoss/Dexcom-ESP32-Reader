@@ -45,7 +45,7 @@ static std::string transmitterID = "***REMOVED***";              /* Set here you
 static boolean useAlternativeChannel = true;      /* Enable when used concurrently with xDrip / Dexcom CGM */           // Tells the transmitter to use the alternative bt channel.
 static volatile boolean connected = false;                                                                              // Indicates if the ble client is connected to the transmitter.
 static boolean bonding = false;                                                                                         // Gets set by Auth handshake "StatusRXMessage" and shows if the transmitter would like to bond with the client.
-static boolean force_rebonding = true;                /* Enable when problems with connecting */                        // When true: disables bonding before auth handshake. Enables bonding after successful authenticated (and before bonding command) so transmitter then can initiate bonding.
+static boolean force_rebonding = false;               /* Enable when problems with connecting */                        // When true: disables bonding before auth handshake. Enables bonding after successful authenticated (and before bonding command) so transmitter then can initiate bonding.
 
 // Shared variables (used in the callbacks)
 static std::string AuthCallbackResponse = "";
@@ -249,11 +249,11 @@ void wakeUpRoutine()
     {
         case ESP_SLEEP_WAKEUP_TIMER : 
             SerialPrintln(DEBUG, "Wakeup caused by timer from hibernation.");                                           // No need to restart because all memory is lost after hibernation (bot not after deep sleep).
-            //ESP.restart();                                                                                            // Restart the ESP, this will forget every ble state and bonding informations.
             break;
         default : 
             //Print all saved values
-            SerialPrintln(DEBUG, "Wakeup was not caused by deep sleep (normal start)."); 
+            force_rebonding = true;                                                                                     // Force bonding when esp first started after power off (or flash).
+            SerialPrintln(DEBUG, "Wakeup was not caused by deep sleep (normal start).");                                // Error allways this case? See https://forum.mongoose-os.com/discussion/1628/tg0wdt-sys-reset-immediately-after-waking-from-deep-sleep
             break;
     }
 }
@@ -270,9 +270,9 @@ void setup()
 
     BLEScan* pBLEScan = BLEDevice::getScan();                                                                           // Retrieve a Scanner.
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());                                          // Set the callback to informed when a new device was detected.
-    pBLEScan->setInterval(100); //100 works                                                                             // The time in ms how long each search intervall last. Important for fast scanning so we dont miss the transmitter waking up.
-    pBLEScan->setWindow(99); //60 works                                                                                 // The actual time that will be searched. Interval - Window = time the esp is doing nothing (used for energy efficiency).
-    pBLEScan->setActiveScan(false);                                                                                     // Possible source of error if we cant connect to the transmitter.
+    pBLEScan->setInterval(50); //100 works                                                                              // The time in ms how long each search intervall last. Important for fast scanning so we dont miss the transmitter waking up.
+    pBLEScan->setWindow(49); //60 works                                                                                 // The actual time that will be searched. Interval - Window = time the esp is doing nothing (used for energy efficiency).
+    pBLEScan->setActiveScan(true);                                                                                      // Possible source of error if we cant connect to the transmitter.
 }
 
 /**
