@@ -45,13 +45,14 @@ static std::string transmitterID = "***REMOVED***";              /* Set here you
 static boolean useAlternativeChannel = true;      /* Enable when used concurrently with xDrip / Dexcom CGM */           // Tells the transmitter to use the alternative bt channel.
 static volatile boolean connected = false;                                                                              // Indicates if the ble client is connected to the transmitter.
 static boolean bonding = false;                                                                                         // Gets set by Auth handshake "StatusRXMessage" and shows if the transmitter would like to bond with the client.
+static boolean force_rebonding = true;                /* Enable when problems with connecting */                        // When true: disables bonding before auth handshake. Enables bonding after successful authenticated (and before bonding command) so transmitter then can initiate bonding.
 
 // Shared variables (used in the callbacks)
 static std::string AuthCallbackResponse = "";
 static std::string ControlCallbackResponse = "";
 // Use "volatile" so that the compiler does not optimise code related 
 // with this variable and delete the empty while loop which is used as a barrier.
-static volatile boolean bondingFinished = false;                                                                        // Get set when the bonding has finished, does not indicates if it was successfull.
+static volatile boolean bondingFinished = false;                                                                        // Get set when the bonding has finished, does not indicates if it was successful.
 
 static BLERemoteCharacteristic* pRemoteCommunication;
 static BLERemoteCharacteristic* pRemoteControl;
@@ -102,8 +103,8 @@ class MySecurity : public BLESecurityCallbacks
     {
         SerialPrint(DEBUG, "pair status = ");
         SerialPrintln(DEBUG, auth_cmpl.success ? "success" : "fail");
-        bondingFinished = true;                                                                                         // Finished with bonding.
         SerialPrintln(DEBUG, "onAuthenticationComplete : finished with bonding.");
+        bondingFinished = true;                                                                                         // Finished with bonding.
     }
 };
 
@@ -154,7 +155,10 @@ static void notifyBackfillCallback(BLERemoteCharacteristic* pBLERemoteCharacteri
     SerialPrintf(DEBUG, "notifyBackfillCallback - read %d byte data: ", length);
     printHexArray(pData, length);
     if(!parseBackfill(uint8ToString(pData, length)))
-        SerialPrintln(ERROR, "Can't parse this backfill data!");
+    {
+        SerialPrint(ERROR, "Can't parse this backfill data: ");
+        printHexArray(pData, length);
+    }
 }
 
 /**
@@ -165,13 +169,13 @@ bool connectToTransmitter()
 {
     SerialPrint(DEBUG, "Forming a connection to ");
     SerialPrintln(DEBUG, myDevice->getAddress().toString().c_str());
-    
+
     BLEClient* pClient = BLEDevice::createClient();                                                                     // We specify the security settings later after we have successful authorised with the transmitter.
     SerialPrintln(DEBUG, " - Created client");
 
     pClient->setClientCallbacks(new MyClientCallback());                                                                // Callbacks for onConnect() onDisconnect()
 
-    // Connect to the remove BLE Server.
+    // Connect to the remote BLE Server.
     if(!pClient->connect(myDevice))                                                                                     // Notice from the example: if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
         return false;
     
@@ -284,13 +288,16 @@ void ExitState(std::string message)
  */
 bool run()
 {
+    if(!force_rebonding)
+        setup_bonding();                                                                                                // Enable bonding from the start on, so transmitter does not want to (re)bond.
+
     if (!connectToTransmitter())                                                                                        // Connect to the found transmitter.
         ExitState("We have failed to connect to the transmitter!");
     else
         SerialPrintln(DEBUG, "We are now connected to the transmitter.");
 
-    //if(!readDeviceInformations())                                                                                       // Read the general device informations like model no. and manufacturer.
-        //SerialPrintln(DEBUG, "Error while reading device informations!");
+    if(!readDeviceInformations())                                                                                       // Read the general device informations like model no. and manufacturer.
+        SerialPrintln(DEBUG, "Error while reading device informations!");
 
     if(!authenticate())                                                                                                 // Authenticate with the transmitter.
         ExitState("Error while trying to authenticate!");
@@ -298,34 +305,32 @@ bool run()
     if(!requestBond())                                                                                                  // Enable encryption and requesting bonding.
         ExitState("Error while trying to bond!");
     
-
     registerForNotificationAndIndication(indicateControlCallback, pRemoteControl);                                      // Now register to receive new data on the control characteristic.
 
     //Reading Time
     if(!readTimeMessage())
         SerialPrintln(ERROR, "Error reading Time Message!");
     
-    //if(!readBatteryStatus())
-        //SerialPrintln(ERROR, "Can't read Battery Status!");
+    if(!readBatteryStatus())
+        SerialPrintln(ERROR, "Can't read Battery Status!");
 
     //Read glucose values
-    //if(!readGlucose())
-        //SerialPrintln(ERROR, "Can't read Glucose!");
+    if(!readGlucose())
+        SerialPrintln(ERROR, "Can't read Glucose!");
 
-    //if(!readSensor())
-        //SerialPrintln(ERROR, "Can't read raw Sensor values!");
+    if(!readSensor())
+        SerialPrintln(ERROR, "Can't read raw Sensor values!");
 
-    //if(!readLastCalibration())
-        //SerialPrintln(ERROR, "Can't read last calibration data!");
+    if(!readLastCalibration())
+        SerialPrintln(ERROR, "Can't read last calibration data!");
 
 
-    const uint8_t notificationOn33[] = {0x1, 0x0};
-    const uint8_t bothOn33[]         = {0x3, 0x0};
-    pRemoteBackfill->registerForNotify(notifyBackfillCallback, true); 
+    //const uint8_t notificationOn33[] = {0x1, 0x0};
+    //const uint8_t bothOn33[]         = {0x3, 0x0};
+    //pRemoteBackfill->registerForNotify(notifyBackfillCallback, true); 
 	//Test with true,false and notification, indication,both
-    pRemoteBackfill->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn33, 2, true);
-    //registerForNotification(notifyBackfillCallback, pRemoteBackfill);
-
+    //pRemoteBackfill->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn33, 2, true);
+    registerForNotification(notifyBackfillCallback, pRemoteBackfill);
 
 
     if(!readBackfill())

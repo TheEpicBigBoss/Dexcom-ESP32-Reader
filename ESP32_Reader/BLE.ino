@@ -50,7 +50,15 @@ bool writeValue(std::string caller, BLERemoteCharacteristic* pRemoteCharacterist
     SerialPrint(DEBUG, caller.c_str());
     SerialPrint(DEBUG, " - Writing Data = ");
     printHexString(data);
-    pRemoteCharacteristic->writeValue(data, true);    /* important must be true so we don't flood the transmitter */    // true = wait for response (acknowledgment) from the transmitter.
+    //BLERemoteCharacteristic: writeValue(std::string newValue, bool response = false);
+    //Not possible to send 0x00 within a string because this method converts std::string to c string using c_str()
+    //And a c string ends with a 0x00 so not the full message gets send. (Only the part before the first 0x00 gets send)
+    //pRemoteCharacteristic->writeValue(data, true);    /* important must be true so we don't flood the transmitter */
+    
+    //const uint8_t* pdata = reinterpret_cast<const uint8_t*>(data.c_str());
+    uint8_t* pdata = reinterpret_cast<uint8_t*>(&data[0]);                                                              // convert std::string to uint8_t pointer
+    /* important must be true so we don't flood the transmitter */
+    pRemoteCharacteristic->writeValue(pdata, data.length(), true);                                            // true = wait for response (acknowledgment) from the transmitter.
     return true;
 }
 

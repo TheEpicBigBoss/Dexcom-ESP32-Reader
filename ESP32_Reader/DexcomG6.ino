@@ -66,8 +66,9 @@ bool requestBond()
 {
     if(bonding)
     {
-        setup_bonding();                                                                                                // Enable bonding.
-        
+        if(force_rebonding)                                                                                             // Enable bonding after successful auth and before sending bond request to transmitter.
+            setup_bonding();
+
         SerialPrintln(DEBUG, "Sending Bond Request.");
         //Send KeepAliveTxMessage
         std::string keepAliveTxMessage = {0x06, 0x19};                                                                  // Opcode 2 byte = 0x06, 25 as hex (0x19)
@@ -80,13 +81,10 @@ bool requestBond()
         while (bondingFinished == false);                                                                               // Barrier waits until bonding has finished, IMPORTANT to set the bondingFinished variable to sig_atomic_t OR volatile
         //Wait
         SerialPrintln(DEBUG, "Bonding finished.");
-        return true;
     }
     else
-    {
-        SerialPrintln(DEBUG, "Transmitter does not want to bond so DONT send bond request.");
-        return true;
-    }
+        SerialPrintln(DEBUG, "Transmitter does not want to (re)bond so DONT send bond request (already bonded).");
+    return true;
 }
 
 uint32_t transmitterStartTime;
@@ -260,34 +258,26 @@ bool readLastCalibration()
  */
 bool readBackfill()
 {
-    std::string backfillTxMessage = {0x50, 0x5, 0x2, 0x0};                                                              // 18 + 2 byte crc = 20 byte
+    std::string backfillTxMessage = {0x50, 0x05, 0x02, 0x00};                                                           // 18 + 2 byte crc = 20 byte
     uint32_t backfill_start = transmitterStartTime - 60 * 60;                                                           // One hour ago.
     uint32_t backfill_end   = transmitterStartTime - 60;                                                                // One minute ago to not request current glucose value.
 
-    /*backfillTxMessage += {uint8_t(backfill_start>>0)};
+    backfillTxMessage += {uint8_t(backfill_start>>0)};
     backfillTxMessage += {uint8_t(backfill_start>>8)};
     backfillTxMessage += {uint8_t(backfill_start>>16)};
-    backfillTxMessage += {uint8_t(backfill_start>>24)};*/
-    backfillTxMessage += {0x00, 0x00, 0x00, 0x00}; 
+    backfillTxMessage += {uint8_t(backfill_start>>24)};
 
-    backfillTxMessage += {uint8_t(backfill_end>>0)};
+    /*backfillTxMessage += {uint8_t(backfill_end>>0)};
     backfillTxMessage += {uint8_t(backfill_end>>8)};
     backfillTxMessage += {uint8_t(backfill_end>>16)};
-    backfillTxMessage += {uint8_t(backfill_end>>24)};
+    backfillTxMessage += {uint8_t(backfill_end>>24)};*/
+    backfillTxMessage += {0x00, 0x00, 0x00, 0x00}; 
 
     backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};                                                          // Fill up to 18 byte
     backfillTxMessage += CRC_16_XMODEM(backfillTxMessage);                                                              // Add crc 16
 
     ControlSendValue(backfillTxMessage);
     std::string backfillRxMessage = ControlWaitToReceiveValue();
-
-    if(backfillRxMessage.length() != 20)
-    {
-        //backfillRxMessage = {0x51, 0x83, 0x01, 0x01, 0xc0, 0x03, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x4c, 0x54, 0xda, 0xe4};
-        backfillRxMessage = {0x51, 0x83, 0x01, 0x02, 0xc0, 0x03, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x3c, 0xbb, 0x67, 0x03};
-        SerialPrintln(DEBUG, "WARNING Emulating backfillRxMessage!!!!");
-    }
-    
     if (backfillRxMessage.length() != 20 || backfillRxMessage[0] != 0x51)
         return false;
 
@@ -310,9 +300,8 @@ bool readBackfill()
 
 
     //emulate callback
-    uint8_t testResponse[] = {0x01, 0x80, 0x01, 0x00, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0c, 0x00, 0x12, 0x7f};
     SerialPrintln(DEBUG, "Emulating Backfill Characteristic Callback");
-    //printHexString(uint8ToString(testResponse, (sizeof(testResponse) / sizeof(testResponse[0]))));
+    uint8_t testResponse[] = {0x01, 0x80, 0x01, 0x00, 0x00, 0x00, 0xc0, 0x03, 0x00, 0x00, 0x0c, 0x00, 0x12, 0x7f};
     notifyBackfillCallback(NULL, testResponse, (sizeof(testResponse) / sizeof(testResponse[0])), true);
 
     return true;
@@ -353,11 +342,12 @@ bool parseBackfill(std::string backfillParseMessage)
     uint16_t glucose = (uint16_t)(data[4] + data[5]*0x100);
     uint8_t type     = (uint8_t)data[6];
     uint8_t trend    = (uint8_t)data[7];
-    SerialPrintf(DATA,  "Backfill Glucose - Dextime: %d\n", dextime);
+    //SerialPrintf(DATA,  "Backfill Glucose - Dextime: %d\n", dextime);
     //SerialPrintf(DATA,  "Backfill Glucose - Time:    %d\n", time);
-    SerialPrintf(DATA,  "Backfill Glucose - Glucose: %d\n", glucose);
-    SerialPrintf(DATA,  "Backfill Glucose - Type:    %d\n", type);
-    SerialPrintf(DATA,  "Backfill Glucose - Trend:   %d\n", trend);
+    //SerialPrintf(DATA,  "Backfill Glucose - Glucose: %d\n", glucose);
+    //SerialPrintf(DATA,  "Backfill Glucose - Type:    %d\n", type);
+    //SerialPrintf(DATA,  "Backfill Glucose - Trend:   %d\n", trend);
+    SerialPrintf(DATA,  "Backfill -> Dextime: %d   Glucose: %d   Type: %d   Trend: %d   \n", dextime, glucose, type, trend);
 }
 
 /**
