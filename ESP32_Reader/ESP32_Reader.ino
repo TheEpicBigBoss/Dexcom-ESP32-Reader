@@ -268,8 +268,8 @@ void setup()
 
     BLEScan* pBLEScan = BLEDevice::getScan();                                                                           // Retrieve a Scanner.
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());                                          // Set the callback to informed when a new device was detected.
-    pBLEScan->setInterval(80); //100 works                                                                              // The time in ms how long each search intervall last. Important for fast scanning so we dont miss the transmitter waking up.
-    pBLEScan->setWindow(79); //60-99 works                                                                              // The actual time that will be searched. Interval - Window = time the esp is doing nothing (used for energy efficiency).
+    pBLEScan->setInterval(100); //100 works                                                                             // The time in ms how long each search intervall last. Important for fast scanning so we dont miss the transmitter waking up.
+    pBLEScan->setWindow(99); //60-99 works                                                                              // The actual time that will be searched. Interval - Window = time the esp is doing nothing (used for energy efficiency).
     pBLEScan->setActiveScan(false);                                                                                     // Possible source of error if we cant connect to the transmitter.
 }
 
@@ -293,10 +293,7 @@ bool run()
         ExitState("We have failed to connect to the transmitter!");
     else
         SerialPrintln(DEBUG, "We are now connected to the transmitter.");
-
-    if(!readDeviceInformations())                                                                                       // Read the general device informations like model no. and manufacturer.
-        SerialPrintln(DEBUG, "Error while reading device informations!");
-
+    
     if(!authenticate())                                                                                                 // Authenticate with the transmitter.
         ExitState("Error while trying to authenticate!");
 
@@ -305,34 +302,31 @@ bool run()
     
     registerForNotificationAndIndication(indicateControlCallback, pRemoteControl);                                      // Now register to receive new data on the control characteristic.
 
+    if(!readDeviceInformations())                                                                                       // Read the general device informations like model no. and manufacturer.
+        SerialPrintln(DEBUG, "Error while reading device informations!");                                               // If empty strings are read from the device information Characteristic, try reading device information after successfully authenticated. 
+
     //Reading Time
     if(!readTimeMessage())
         SerialPrintln(ERROR, "Error reading Time Message!");
     
-    if(!readBatteryStatus())
-        SerialPrintln(ERROR, "Can't read Battery Status!");
+    //if(!readBatteryStatus())
+        //SerialPrintln(ERROR, "Can't read Battery Status!");
 
     //Read glucose values
-    if(!readGlucose())
-        SerialPrintln(ERROR, "Can't read Glucose!");
+    //if(!readGlucose())
+        //SerialPrintln(ERROR, "Can't read Glucose!");
 
-    if(!readSensor())
-        SerialPrintln(ERROR, "Can't read raw Sensor values!");
+    //if(!readSensor())
+        //SerialPrintln(ERROR, "Can't read raw Sensor values!");
 
-    if(!readLastCalibration())
-        SerialPrintln(ERROR, "Can't read last calibration data!");
+    //if(!readLastCalibration())
+        //SerialPrintln(ERROR, "Can't read last calibration data!");
 
-
-    //const uint8_t notificationOn33[] = {0x1, 0x0};
-    //const uint8_t bothOn33[]         = {0x3, 0x0};
-    //pRemoteBackfill->registerForNotify(notifyBackfillCallback, true); 
-	//Test with true,false and notification, indication,both
-    //pRemoteBackfill->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn33, 2, true);
     registerForNotification(notifyBackfillCallback, pRemoteBackfill);
-
 
     if(!readBackfill())
         SerialPrintln(ERROR, "Can't read backfill data!");
+    
     //Let the Transmitter close the connection.
     sendDisconnect();
 }

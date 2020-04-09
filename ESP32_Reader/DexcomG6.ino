@@ -87,7 +87,7 @@ bool requestBond()
     return true;
 }
 
-uint32_t transmitterStartTime;
+uint32_t transmitterStartTime = 0;
 /**
  * Read the time information from the transmitter.
  */
@@ -258,6 +258,8 @@ bool readLastCalibration()
  */
 bool readBackfill()
 {
+    if(transmitterStartTime == 0)                                                                                       // The read time command must be send first to get the current time.
+        return false;
     std::string backfillTxMessage = {0x50, 0x05, 0x02, 0x00};                                                           // 18 + 2 byte crc = 20 byte
     uint32_t backfill_start = transmitterStartTime - 60 * 60;                                                           // One hour ago.
     uint32_t backfill_end   = transmitterStartTime - 60;                                                                // One minute ago to not request current glucose value.
@@ -272,8 +274,8 @@ bool readBackfill()
     backfillTxMessage += {uint8_t(backfill_end>>16)};
     backfillTxMessage += {uint8_t(backfill_end>>24)};
 
-    backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};                                                          // Fill up to 18 byte
-    backfillTxMessage += CRC_16_XMODEM(backfillTxMessage);                                                              // Add crc 16
+    backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};                                                          // Fill up to 18 byte.
+    backfillTxMessage += CRC_16_XMODEM(backfillTxMessage);                                                              // Add crc 16.
 
     ControlSendValue(backfillTxMessage);
     std::string backfillRxMessage = ControlWaitToReceiveValue();
@@ -298,7 +300,7 @@ bool readBackfill()
     SerialPrintf(DATA, "Backfill - Timestamp End:   %d\n", timestampEnd);
 
     SerialPrintln(DATA, "Waiting for backfill data...");
-    delay(5*1000);                                                                                                      // Wait 5 seconds until all backfill data arrived
+    delay(4*1000);                                                                                                      // Wait 4 seconds until all backfill data arrived. After 5 seconds the transmitter closes the connection.
     return true;
 }
 
@@ -306,6 +308,7 @@ bool readBackfill()
  * This method saves the backfill data received from the backfill characteristic callback.
  */
 std::string backfillStream = "";
+int backfillExpectedSequence = 1;
 bool saveBackfill(std::string backfillParseMessage)
 {
     if (backfillParseMessage.length() < 2)                                                                              // Minimum is sequence + identifier.
@@ -313,6 +316,13 @@ bool saveBackfill(std::string backfillParseMessage)
 
     uint8_t sequence   = (uint8_t)backfillParseMessage[0];
     uint8_t identifier = (uint8_t)backfillParseMessage[1];
+
+    if(sequence != backfillExpectedSequence)
+    {
+        SerialPrintln(ERROR,  "Backfill Data Error - WRONG ORDER...\n");
+        return false;
+    }
+    backfillExpectedSequence += 1;
 
     if(sequence == 1)
     {
@@ -353,7 +363,7 @@ void parseBackfill(std::string data)
     uint16_t glucose = (uint16_t)(data[4] + data[5]*0x100);
     uint8_t type     = (uint8_t)data[6];
     uint8_t trend    = (uint8_t)data[7];
-    SerialPrintf(DATA,  "Backfill -> Dextime: %d   Glucose: %d   Type: %d   Trend: %d   \n", dextime, glucose, type, trend);
+    SerialPrintf(DATA,  "Backfill -> Dextime: %d   Glucose: %d   Type: %d\n", dextime, glucose, type);
 }
 
 /**
