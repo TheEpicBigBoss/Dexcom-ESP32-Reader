@@ -2,6 +2,7 @@
  * Dexcom BLE communication functions.
  * 
  * Author: Max Kaiser
+ * Copyright (c) 2020
  * 12.04.2020
  */
 

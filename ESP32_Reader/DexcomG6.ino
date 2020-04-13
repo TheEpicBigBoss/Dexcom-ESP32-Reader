@@ -2,14 +2,15 @@
  * Functions for authentication and reading data form the dexcom transmitter.
  * 
  * Author: Max Kaiser
+ * Copyright (c) 2020
  * 12.04.2020
  */
 
 #include "mbedtls/aes.h"
 #include "Output.h"
 
-std::string backfillStream = "";
-int backfillExpectedSequence = 1;
+static std::string backfillStream = "";
+static int backfillExpectedSequence = 1;
 
 /**
  * This function will authenticate with the transmitter using a handshake and the transmitter ID.
@@ -157,11 +158,11 @@ bool readGlucose()
 {
     std::string glucoseTxMessageG5 = {0x30, 0x53, 0x36};                                                                // G5 = 0x30 the other 2 bytes are the CRC16 XMODEM value in twisted order
     std::string glucoseTxMessageG6 = {0x4e, 0x0a, 0xa9};                                                                // G6 = 0x4e
-    if(transmitterID[0] != 8)                                                                                           // G5
-        ControlSendValue(glucoseTxMessageG5);
-    else                                                                                                                // G6
+    if(transmitterID[0] == 8 || (transmitterID[0] == 2 && transmitterID[1] == 2 && transmitterID[2] == 2))              // Check if G6 or one of the newest G6 plus (>2.18.2.88) see https://github.com/xdrip-js/xdrip-js/issues/87
         ControlSendValue(glucoseTxMessageG6);
-
+    else
+        ControlSendValue(glucoseTxMessageG5);
+    
     std::string glucoseRxMessage = ControlWaitToReceiveValue();
     if (glucoseRxMessage.length() < 16 || glucoseRxMessage[0] != (transmitterID[0] != 8 ? 0x31 : 0x4f))                 // Opcode depends on G5 / G6
         return false;
@@ -184,11 +185,18 @@ bool readGlucose()
     int trend = (int)glucoseRxMessage[13];
     SerialPrintf(DATA, "Glucose - Status:      %d\n", status);
     SerialPrintf(DATA, "Glucose - Sequence:    %d\n", sequence);
-    SerialPrintf(DATA, "Glucose - Timestamp:   %d\n", timestamp);                                                            // Seconds since transmitter activation
+    SerialPrintf(DATA, "Glucose - Timestamp:   %d\n", timestamp);                                                       // Seconds since transmitter activation
     SerialPrintf(DATA, "Glucose - DisplayOnly: %s\n", (glucoseIsDisplayOnly ? "true" : "false"));
     SerialPrintf(GLUCOSE, "Glucose - Glucose:     %d\n", glucose);
     SerialPrintf(DATA, "Glucose - State:       %d\n", state);
     SerialPrintf(DATA, "Glucose - Trend:       %d\n", trend);
+
+    if(saveLastXValues > 0)                                                                                             // Array is big enouth for min one value.
+    {
+        for(int i = saveLastXValues - 1; i > 0; i--)                                                                    // Shift all old values back to set the newest to position 0.
+            glucoseValues[i] = glucoseValues[i-1];
+        glucoseValues[0] = glucose;
+    }
     return true;
 }
 
@@ -268,8 +276,9 @@ bool readBackfill()
     backfillExpectedSequence = 1;                                                                                       // Set to the first message.
 
     std::string backfillTxMessage = {0x50, 0x05, 0x02, 0x00};                                                           // 18 + 2 byte crc = 20 byte
-    uint32_t backfill_start = transmitterStartTime - 60 * 60;                                                           // One hour ago.
-    uint32_t backfill_end   = transmitterStartTime - 60;                                                                // One minute ago to not request current glucose value.
+    // Set backfill_start to 0 to get all values of the last ~150 measurements (~12,5h)
+    uint32_t backfill_start = transmitterStartTime - (saveLastXValues * 5) * 60;                                        // Get the last x values. Only need x-1 because we already have the current value but request one more to be sure that we get x-1.
+    uint32_t backfill_end   = transmitterStartTime - 60;                                                                // Do not request the current value. (But is not anyway available by backfill)
 
     backfillTxMessage += {uint8_t(backfill_start>>0)};
     backfillTxMessage += {uint8_t(backfill_start>>8)};
@@ -286,7 +295,8 @@ bool readBackfill()
 
 	SerialPrintf(DEBUG,  "Request backfill from %d to %d (current %d).\n", backfill_start, backfill_end, transmitterStartTime);
     ControlSendValue(backfillTxMessage);
-    std::string backfillRxMessage = ControlWaitToReceiveValue();
+    SerialPrintln(DATA, "Waiting for backfill data...");
+    std::string backfillRxMessage = ControlWaitToReceiveValue();                                                        // We will receive this normally after all backfill data has been send by the transmitter.
     if (backfillRxMessage.length() != 20 || backfillRxMessage[0] != 0x51)
         return false;
 
@@ -306,8 +316,9 @@ bool readBackfill()
     SerialPrintf(DATA, "Backfill - Identifier:      %d\n", identifier);
     SerialPrintf(DATA, "Backfill - Timestamp Start: %d\n", timestampStart);
     SerialPrintf(DATA, "Backfill - Timestamp End:   %d\n", timestampEnd);
+    printSavedGlucose();
 
-    SerialPrintln(DATA, "Waiting for backfill data...");
+    delay(2*1000);                                                                                                      // Wait 2 seconds to be sure that all backfill data has arrived. 
     return true;
 }
 
@@ -341,8 +352,8 @@ bool saveBackfill(std::string backfillParseMessage)
     else
         backfillStream += backfillParseMessage.substr(2);                                                               // Add data.
     
-    SerialPrintf(DATA, "Backfill Data - Sequence: %d   Identifier: %d   Data: ", sequence, identifier);
-    printHexString(backfillParseMessage);
+    //SerialPrintf(DATA, "Backfill Data - Sequence: %d   Identifier: %d   Data: ", sequence, identifier);
+    //printHexString(backfillParseMessage);
 
     while(backfillStream.length() >= 8)
     {
@@ -353,7 +364,6 @@ bool saveBackfill(std::string backfillParseMessage)
             backfillStream = "";                                                                                        // Empty string.
         parseBackfill(data);
     }
-    
     return true;
 }
 
@@ -369,7 +379,15 @@ void parseBackfill(std::string data)
     uint16_t glucose = (uint16_t)(data[4] + data[5]*0x100);
     uint8_t type     = (uint8_t)data[6];
     uint8_t trend    = (uint8_t)data[7];
-    SerialPrintf(DATA,  "Backfill -> Dextime: %d   Glucose: %d   Type: %d\n", dextime, glucose, type);
+
+    if(saveLastXValues > 1)                                                                                             // Array is big enouth for min 1 backfill value (and the current value).
+    {
+        for(int i = saveLastXValues - 1; i > 1; i--)                                                                    // Shift all old values (but not the first) back to save these.
+            glucoseValues[i] = glucoseValues[i-1];
+        glucoseValues[1] = glucose;
+    }
+    
+    SerialPrintf(GLUCOSE,  "Backfill -> Dextime: %d   Glucose: %d   Type: %d\n", dextime, glucose, type);
 }
 
 /**

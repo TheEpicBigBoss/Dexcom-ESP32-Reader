@@ -3,6 +3,7 @@
  * Must be a header file so it can be included in the Arduino files.
  * 
  * Author: Max Kaiser
+ * Copyright (c) 2020
  * 12.04.2020
  */
 

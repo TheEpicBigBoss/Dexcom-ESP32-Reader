@@ -53,10 +53,10 @@ static boolean force_rebonding = false;               /* Enable when problems wi
 
 
 // Variables which survives the deep sleep. Uses RTC_SLOW memory.
-RTC_SLOW_ATTR static uint16_t values_start = 0;
-RTC_SLOW_ATTR static uint16_t values_end   = 0;                                                                         // Start and end for the crycle array for glucose values.
-RTC_SLOW_ATTR static uint16_t glucoseValues[12] = {0};                                                                  // Reserve space for 1 hour a 5 min resolution of glucose values.
+#define saveLastXValues 12                                                                                              // This saves the last x glucose levels by requesting them through the backfill request.
+RTC_SLOW_ATTR static uint16_t glucoseValues[saveLastXValues] = {0};                                                     // Reserve space for 1 hour a 5 min resolution of glucose values.
 RTC_SLOW_ATTR static boolean error_last_connection = false;
+static boolean error_current_connection = false;                                                                        // To detect an error in the current session.
 
 // Shared variables (used in the callbacks)
 static volatile boolean connected = false;                                                                              // Indicates if the ble client is connected to the transmitter. Used to detect a transmitter timeout.
@@ -87,7 +87,7 @@ class MyClientCallback : public BLEClientCallbacks
     void sleepHibernation()
     {
         esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_ON);                                              // Keep the RTC slow memory on to save the last glucose values and last error variable.
-        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
+        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_ON);                                              // Could be turned off in later esp chips but is on to not trigger this bug https://forum.mongoose-os.com/discussion/1628/tg0wdt-sys-reset-immediately-after-waking-from-deep-sleep
         esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
         esp_sleep_enable_timer_wakeup(270 * 1000000);                                                                   // Sleep for 4.5 minutes.
         SerialPrintln(DEBUG, "Going back to hibernation sleep mode now.");
@@ -102,6 +102,7 @@ class MyClientCallback : public BLEClientCallbacks
     void onDisconnect(BLEClient* bleClient)
     {
         SerialPrintln(DATA, "onDisconnect");                                                                            // Go on the onDisconnect event directly into deep sleep -> So we can go to the deep sleep even when
+        error_last_connection = error_current_connection;                                                               // Save if there was an error in this session.
         sleepHibernation();                                                                                             // the chracacteristic->write() freezes (happens with low battery transmitters A:<218 B:<172 R:>4454 ).
     }
 };
@@ -235,7 +236,7 @@ bool connectToTransmitter()
     getCharacteristic(&pRemoteFirmware, pRemoteServiceInfos, firmwareUUID);
     SerialPrintln(DEBUG, " - Found our characteristics");
 
-    registerForNotificationAndIndication(indicateAuthCallback, pRemoteAuthentication);                                  // Needed to work with G6 Plus (and G6) sensor. The command below only works for G6 (81...) transmitter.
+    forceRegisterNotificationAndIndication(indicateAuthCallback, pRemoteAuthentication, false);                         // Needed to work with G6 Plus (and G6) sensor. The command below only works for G6 (81...) transmitter.
     //registerForIndication(indicateAuthCallback, pRemoteAuthentication);                                               // We only register for the Auth characteristic. When we are authorised we can register for the other characteristics.
     return true;
 }
@@ -276,13 +277,28 @@ void wakeUpRoutine()
                 force_rebonding = true;
                 SerialPrintln(DEBUG, "Error happened in last connection so set force rebonding to true.");
             }                                                                                                           // Otherwise keep the default force_rebonding setting. (could be false or true when changed manually).
-            SerialPrintln(DEBUG, "Wakeup caused by timer from hibernation.");                                           // No need to restart because all memory is lost after hibernation (bot not after deep sleep).
+            SerialPrintln(DEBUG, "Wakeup caused by timer from hibernation.");                                           // No need to restart / reset variables because all memory is lost after hibernation.
+            printSavedGlucose();                                                                                        // Only potential values available when woke up from deep sleep.
             break;
         default :
             force_rebonding = true;                                                                                     // Force bonding when esp first started after power off (or flash).
             SerialPrintln(DEBUG, "Wakeup was not caused by deep sleep (normal start).");                                // Problem with allways this case? See https://forum.mongoose-os.com/discussion/1628/tg0wdt-sys-reset-immediately-after-waking-from-deep-sleep
             break;
     }
+}
+
+/**
+ * Returns true if invalid data was found / missing values or not x values are available.
+ */
+bool needBackfill()
+{
+    bool doBackfill = error_last_connection;                                                                            // Also request backfill if last time was an error (maybe error while backfilling so missed some data).
+    for(int i = 0; i < saveLastXValues && !doBackfill; i++)
+    {
+        if(glucoseValues[i] < 10 || glucoseValues[i] > 600)                                                             // This includes 0 values from initialisation.
+            doBackfill = true;
+    }
+    return doBackfill;
 }
 
 /**
@@ -307,7 +323,7 @@ void setup()
  */
 void ExitState(std::string message)
 {
-    error_last_connection = true;                                                                                       // Set to true to indicate that an error has occured.
+    error_current_connection = true;                                                                                    // Set to true to indicate that an error has occured.
     SerialPrintln(ERROR, message.c_str());
     pClient->disconnect();                                                                                              // Disconnect to trigger onDisconnect event and go to sleep.
 }
@@ -316,7 +332,7 @@ void ExitState(std::string message)
  */
 bool run()
 {
-    error_last_connection = true;                                                                                       // Set to true to mark a potential error if it does not get set to false after successfully transmitter communication.
+    error_current_connection = true;                                                                                    // Set to true to mark a potential error if it does not get set to false after successfully transmitter communication.
 
     if(!force_rebonding)
         setup_bonding();                                                                                                // Enable bonding from the start on, so transmitter does not want to (re)bond.
@@ -335,7 +351,7 @@ bool run()
     if(!requestBond())                                                                                                  // Enable encryption and requesting bonding.
         ExitState("Error while trying to bond!");
     
-    registerForNotificationAndIndication(indicateControlCallback, pRemoteControl);                                      // Now register (after auth) to receive new data on the control characteristic.
+    forceRegisterNotificationAndIndication(indicateControlCallback, pRemoteControl, false);                             // Now register (after auth) to receive new data on the control characteristic.
 
     // Reading current time from the transmitter (important for backfill).
     if(!readTimeMessage())
@@ -345,7 +361,7 @@ bool run()
     //if(!readBatteryStatus())
         //SerialPrintln(ERROR, "Can't read Battery Status!");
 
-    //Read current glucose level.
+    //Read current glucose level to save it.
     if(!readGlucose())
         SerialPrintln(ERROR, "Can't read Glucose!");
 
@@ -357,19 +373,15 @@ bool run()
     //if(!readLastCalibration())
         //SerialPrintln(ERROR, "Can't read last calibration data!");
 
+    if(needBackfill())
+    {
+        forceRegisterNotificationAndIndication(notifyBackfillCallback, pRemoteBackfill, true);                          // Now register on the backfill characteristic.       
+        // Read backfill of the last x values to also saves them.
+        if(!readBackfill())
+            SerialPrintln(ERROR, "Can't read backfill data!");
+    }
 
-    const uint8_t bothOn4[] = {0x3, 0x0};
-    pRemoteBackfill->registerForNotify(notifyBackfillCallback, true);
-    pRemoteBackfill->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn4, 2, true);
-    
-    //registerForNotification(notifyBackfillCallback, pRemoteBackfill);                                                   // Now register on the backfill characteristic.
-
-    if(!readBackfill())
-        SerialPrintln(ERROR, "Can't read backfill data!");
-    
-    error_last_connection = false;                                                                                      // When we reached this point no error occured.
-    delay(3*1000);                                                                                                      // Wait 3 seconds until all backfill data arrived. After 5 seconds the transmitter closes the connection.
-    
+    error_current_connection = false;                                                                                   // When we reached this point no error occured.
     //Let the Transmitter close the connection.
     sendDisconnect();
 }

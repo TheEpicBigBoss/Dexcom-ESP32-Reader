@@ -2,6 +2,7 @@
  * Some helper functions for debugging and printing values.
  * 
  * Author: Max Kaiser
+ * Copyright (c) 2020
  * 12.04.2020
  */
 
@@ -47,6 +48,21 @@ std::string uint8ToString(uint8_t *data, size_t length)
         value += (char)data[i];
     }
     return value;
+}
+
+/**
+ * Prints out the last x glucose levels.
+ */ 
+void printSavedGlucose()
+{
+    SerialPrintf(GLUCOSE, "Last %d glucose values (current -> past):\n", saveLastXValues);
+    for(int i = 0; i < saveLastXValues; i++)
+    {
+        if(glucoseValues[i] == 0)                                                                                       // The initialisation value.
+            break;
+        SerialPrintf(GLUCOSE, "%d ", glucoseValues[i]);
+    }
+    SerialPrintln(GLUCOSE, "");
 }
 
 /**
