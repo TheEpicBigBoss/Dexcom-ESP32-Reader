@@ -2,7 +2,7 @@
  * General bluetooth low energy (BLE) functionality for the bluedroid stack.
  * 
  * Author: Max Kaiser
- * 24.03.2020
+ * 12.04.2020
  */
 
 #include "BLEDevice.h"
@@ -31,18 +31,6 @@ bool getCharacteristic(BLERemoteCharacteristic** pRemoteCharacteristic, BLERemot
 }
 
 /**
- * Write an uint8_t array to the given characteristic.
- */ 
-/*bool writeValue(std::string caller, BLERemoteCharacteristic* pRemoteCharacteristic, uint8_t data[])
-{
-    SerialPrint(DEBUG, caller.c_str());
-    SerialPrint(DEBUG, " - Writing Data Array = ");
-    printHexArray(data, sizeof(data) / sizeof(data[0]));
-    pRemoteCharacteristic->writeValue(data, sizeof(data) / sizeof(data[0]), true);                                      // Is the size calculation correct, does it need length of the array or length in byte?
-    return true;
-}//*/
-
-/**
  * Write a string to the given characteristic.
  */ 
 bool writeValue(std::string caller, BLERemoteCharacteristic* pRemoteCharacteristic, std::string data)
@@ -50,15 +38,12 @@ bool writeValue(std::string caller, BLERemoteCharacteristic* pRemoteCharacterist
     SerialPrint(DEBUG, caller.c_str());
     SerialPrint(DEBUG, " - Writing Data = ");
     printHexString(data);
-    //BLERemoteCharacteristic: writeValue(std::string newValue, bool response = false);
-    //Not possible to send 0x00 within a string because this method converts std::string to c string using c_str()
-    //And a c string ends with a 0x00 so not the full message gets send. (Only the part before the first 0x00 gets send)
-    //pRemoteCharacteristic->writeValue(data, true);    /* important must be true so we don't flood the transmitter */
+    //BLERemoteCharacteristic: writeValue(std::string newValue, bool response = false);                                 //Not possible to send 0x00 within a string because this method converts std::string to c string using c_str()
+    //pRemoteCharacteristic->writeValue(data, true);    /* important must be true so we don't flood the transmitter */  //And a c string ends with a 0x00 so not the full message gets send. (Only the part before the first 0x00 gets send)
     
-    //const uint8_t* pdata = reinterpret_cast<const uint8_t*>(data.c_str());
     uint8_t* pdata = reinterpret_cast<uint8_t*>(&data[0]);                                                              // convert std::string to uint8_t pointer
     /* important must be true so we don't flood the transmitter */
-    pRemoteCharacteristic->writeValue(pdata, data.length(), true);                                            // true = wait for response (acknowledgment) from the transmitter.
+    pRemoteCharacteristic->writeValue(pdata, data.length(), true);                                                      // true = wait for response (acknowledgment) from the transmitter.
     return true;
 }
 

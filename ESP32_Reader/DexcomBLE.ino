@@ -2,21 +2,11 @@
  * Dexcom BLE communication functions.
  * 
  * Author: Max Kaiser
- * 24.03.2020
+ * 12.04.2020
  */
 
 #include "BLEDevice.h"
 #include "Output.h"
-/**
- * The old pseudo implementation if the notifications does not work and we must check if new data is available.
- */
-std::string SendAndWaitForResponse()
-{
-  // var a = Read current value of the characteristic.
-  // Write new value to the characteristic.
-  // loop and read value of the characteristic:
-  //  - return if value of characteristics != write value && value of characteristics != a (the value before the write)
-}
 
 /**
  * Wrapper function to send data to the authentication characteristic.
@@ -47,13 +37,13 @@ std::string AuthWaitToReceiveValue()
         {
             std::string returnValue = AuthCallbackResponse;                                                             // Save the new value.
             AuthCallbackResponse = "";                                                                                  // Reset because we handled the new data.
-            SerialPrint(DEBUG, "AuthWaitToReceiveValue = ");
-            printHexString(returnValue);
+            //SerialPrint(DEBUG, "AuthWaitToReceiveValue = ");
+            //printHexString(returnValue);
             return returnValue;
         }
     }
     ExitState("Error timeout in AuthWaitToReceiveValue");                                                               // The transmitter disconnected so exit.
-    return NULL;
+    return "";
 }
 
 /**
@@ -67,11 +57,11 @@ std::string ControlWaitToReceiveValue()
         {
             std::string returnValue = ControlCallbackResponse;                                                          // Save the new value.
             ControlCallbackResponse = "";                                                                               // Reset because we handled the new data.
-            SerialPrint(DEBUG, "ControlWaitToReceiveValue = ");
-            printHexString(returnValue);
+            //SerialPrint(DEBUG, "ControlWaitToReceiveValue = ");
+            //printHexString(returnValue);
             return returnValue;
         }
     }
     ExitState("Error timeout in ControlWaitToReceiveValue");                                                            // The transmitter disconnected so exit.
-    return NULL;
+    return "";
 }

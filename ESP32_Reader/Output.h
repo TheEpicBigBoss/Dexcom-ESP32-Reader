@@ -3,7 +3,7 @@
  * Must be a header file so it can be included in the Arduino files.
  * 
  * Author: Max Kaiser
- * 24.03.2020
+ * 12.04.2020
  */
 
 #ifndef OUTPUT_H
@@ -21,8 +21,8 @@ typedef enum
 { 
     FULL           = 0,                                                                                                 // Prints all output.
     NO_DEBUG       = 1,                                                                                                 // Prints only errors or data from the transmitter.
-    ONLY_ERROR     = 2,                                                                                                 // Prints only errors ond one line with glucose.
-    ONLY_GLUCOSE   = 3,                                                                                                 // Print only one line with the glucose value (NO ERRORS!).
+    ONLY_ERROR     = 2,                                                                                                 // Prints only errors and lines with glucose.
+    ONLY_GLUCOSE   = 3,                                                                                                 // Print only lines with the glucose values (NO ERRORS!).
     NONE           = 4                                                                                                  // Do not print anything - used when no serial monitor is connected.
 } OutputLevel;
 

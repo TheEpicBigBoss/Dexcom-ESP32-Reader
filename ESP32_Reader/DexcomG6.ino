@@ -2,11 +2,14 @@
  * Functions for authentication and reading data form the dexcom transmitter.
  * 
  * Author: Max Kaiser
- * 24.03.2020
+ * 12.04.2020
  */
 
 #include "mbedtls/aes.h"
 #include "Output.h"
+
+std::string backfillStream = "";
+int backfillExpectedSequence = 1;
 
 /**
  * This function will authenticate with the transmitter using a handshake and the transmitter ID.
@@ -260,6 +263,10 @@ bool readBackfill()
 {
     if(transmitterStartTime == 0)                                                                                       // The read time command must be send first to get the current time.
         return false;
+    
+    backfillStream = "";                                                                                                // Empty the backfill stream.
+    backfillExpectedSequence = 1;                                                                                       // Set to the first message.
+
     std::string backfillTxMessage = {0x50, 0x05, 0x02, 0x00};                                                           // 18 + 2 byte crc = 20 byte
     uint32_t backfill_start = transmitterStartTime - 60 * 60;                                                           // One hour ago.
     uint32_t backfill_end   = transmitterStartTime - 60;                                                                // One minute ago to not request current glucose value.
@@ -277,6 +284,7 @@ bool readBackfill()
     backfillTxMessage += {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};                                                          // Fill up to 18 byte.
     backfillTxMessage += CRC_16_XMODEM(backfillTxMessage);                                                              // Add crc 16.
 
+	SerialPrintf(DEBUG,  "Request backfill from %d to %d (current %d).\n", backfill_start, backfill_end, transmitterStartTime);
     ControlSendValue(backfillTxMessage);
     std::string backfillRxMessage = ControlWaitToReceiveValue();
     if (backfillRxMessage.length() != 20 || backfillRxMessage[0] != 0x51)
@@ -300,15 +308,12 @@ bool readBackfill()
     SerialPrintf(DATA, "Backfill - Timestamp End:   %d\n", timestampEnd);
 
     SerialPrintln(DATA, "Waiting for backfill data...");
-    delay(4*1000);                                                                                                      // Wait 4 seconds until all backfill data arrived. After 5 seconds the transmitter closes the connection.
     return true;
 }
 
 /**
  * This method saves the backfill data received from the backfill characteristic callback.
  */
-std::string backfillStream = "";
-int backfillExpectedSequence = 1;
 bool saveBackfill(std::string backfillParseMessage)
 {
     if (backfillParseMessage.length() < 2)                                                                              // Minimum is sequence + identifier.
@@ -320,6 +325,7 @@ bool saveBackfill(std::string backfillParseMessage)
     if(sequence != backfillExpectedSequence)
     {
         SerialPrintln(ERROR,  "Backfill Data Error - WRONG ORDER...\n");
+        backfillExpectedSequence = 0;                                                                                   // After one out of order package the other packages can't be used.
         return false;
     }
     backfillExpectedSequence += 1;
@@ -357,9 +363,9 @@ bool saveBackfill(std::string backfillParseMessage)
 void parseBackfill(std::string data)
 {
     uint32_t dextime = (uint32_t)(data[0] + 
-                                    data[1]*0x100  + 
-                                    data[2]*0x10000 + 
-                                    data[3]*0x1000000);
+                                  data[1]*0x100  + 
+                                  data[2]*0x10000 + 
+                                  data[3]*0x1000000);
     uint16_t glucose = (uint16_t)(data[4] + data[5]*0x100);
     uint8_t type     = (uint8_t)data[6];
     uint8_t trend    = (uint8_t)data[7];
@@ -377,7 +383,6 @@ bool sendDisconnect()
     while(connected);                                                                                                   // Wait until onDisconnect callback was called and connected status flipped.
     return true;
 }
-
 
 /**
  * Encrypt using AES 182 ecb (Electronic Code Book Mode).

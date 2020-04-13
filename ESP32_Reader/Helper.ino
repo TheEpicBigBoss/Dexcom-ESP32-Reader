@@ -2,7 +2,7 @@
  * Some helper functions for debugging and printing values.
  * 
  * Author: Max Kaiser
- * 24.03.2020
+ * 12.04.2020
  */
 
 #include "BLEDevice.h"
@@ -50,7 +50,7 @@ std::string uint8ToString(uint8_t *data, size_t length)
 }
 
 /**
- * 
+ * Calculate crc16 check sum for the given string.
  */
 std::string CRC_16_XMODEM(std::string message)
 {
