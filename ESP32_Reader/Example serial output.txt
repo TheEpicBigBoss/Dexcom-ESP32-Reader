@@ -1,0 +1,84 @@
+Example output of a complete read event.
+Some Data is 0 because my sensor is currently stopped.
+
+11:21:12.698 -> mode:DIO, clock div:1
+11:21:12.698 -> load:0x3fff0018,len:4
+11:21:12.698 -> load:0x3fff001c,len:1216
+11:21:12.698 -> ho 0 tail 12 room 4
+11:21:12.698 -> load:0x40078000,len:9720
+11:21:12.698 -> ho 0 tail 12 room 4
+11:21:12.698 -> load:0x40080400,len:6352
+11:21:12.698 -> entry 0x400806b8
+11:21:13.104 -> Wakeup was not caused by deep sleep (normal start).
+11:21:13.104 -> Starting ESP32 dexcom client application...
+11:21:18.370 -> BLE Advertised Device found: Name: Pin+512, Address: xx:xx:xx:xx:xx:xx, serviceUUID: e3bbc0ac-6ab5-4d40-a86c-f6ab146c9b4c, txPower: -2
+11:25:16.649 -> BLE Advertised Device found: Name: DexcomXX, Address: xx:xx:xx:xx:xx:xx, manufacturer data: d000f203, serviceUUID: 0000febc-0000-1000-8000-00805f9b34fb
+11:25:16.649 -> Forming a connection to xx:xx:xx:xx:xx:xx
+11:25:16.649 ->  - Created client
+11:25:16.790 -> onConnect
+11:25:16.790 ->  - Connected to server
+11:25:17.540 ->  - Found our services
+11:25:17.587 ->  - Found our characteristics
+11:25:17.587 ->  - Registered for indicate on UUID: f8083535-849e-531c-c594-30f1f86a4ea5
+11:25:17.587 -> We are now connected to the transmitter.
+11:25:17.587 -> The Manufacturer value was: Dexcom
+11:25:17.634 -> The Model value was: SW11163
+11:25:17.634 -> The Firmware value was: 1.6.5.25
+11:25:17.681 -> AuthSendValue - Writing Data = 1 xx xx xx xx xx xx xx xx 2 
+11:25:17.727 -> indicateAuthCallback - read 17 byte data: 3 xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx 
+11:25:17.727 -> AuthWaitToReceiveValue = 3 xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx 
+11:25:17.727 -> AuthSendValue - Writing Data = 4 xx xx xx xx xx xx xx xx 
+11:25:17.727 -> indicateAuthCallback - read 3 byte data: 5 1 2 
+11:25:17.727 -> AuthWaitToReceiveValue = 5 1 2 
+11:25:17.727 -> Authenticated!
+11:25:17.727 -> Sending Bond Request.
+11:25:17.727 -> AuthSendValue - Writing Data = 6 19 
+11:25:17.774 -> indicateAuthCallback - read 3 byte data: FF 6 1 
+11:25:17.774 -> AuthSendValue - Writing Data = 7 
+11:25:17.821 -> Waiting for bond.
+11:25:17.915 -> pair status = success
+11:25:17.915 -> Bonding finished.
+11:25:17.915 -> onAuthenticationComplete : finished with bonding.
+11:25:17.962 ->  - Registered for indicate on UUID: f8083534-849e-531c-c594-30f1f86a4ea5
+11:25:17.962 -> ControlSendValue - Writing Data = 24 E6 64 
+11:25:17.962 -> indicateControlCallback - read 16 byte data: 25 83 67 44 7 0 FF FF FF FF 1 0 0 0 57 9A 
+11:25:17.962 -> ControlWaitToReceiveValue = 25 83 67 44 7 0 FF FF FF FF 1 0 0 0 57 9A 
+11:25:17.962 -> Time - Status:              131
+11:25:17.962 -> Time - since activation:    476263 (5 days, 12 hours)
+11:25:17.962 -> Time - since session start: -1
+11:25:18.009 -> Reading Battery Status.
+11:25:18.009 -> ControlSendValue - Writing Data = 22 20 4 
+11:25:18.009 -> indicateControlCallback - read 12 byte data: 23 83 EE 0 C1 0 A6 F 5 1A DC A2 
+11:25:18.009 -> ControlWaitToReceiveValue = 23 83 EE 0 C1 0 A6 F 5 1A DC A2 
+11:25:18.009 -> Battery - Status:      131
+11:25:18.009 -> Battery - Voltage A:   238
+11:25:18.009 -> Battery - Voltage B:   193
+11:25:18.009 -> Battery - Resistance:  4006
+11:25:18.009 -> Battery - Runtime:     5
+11:25:18.056 -> Battery - Temperature: 26
+11:25:18.056 -> ControlSendValue - Writing Data = 30 53 36 
+11:25:18.056 -> indicateControlCallback - read 16 byte data: 31 83 0 0 0 0 63 44 7 0 1 0 1 7F 7 1 
+11:25:18.056 -> ControlWaitToReceiveValue = 31 83 0 0 0 0 63 44 7 0 1 0 1 7F 7 1 
+11:25:18.056 -> Glucose - Status:      131
+11:25:18.056 -> Glucose - Sequence:    0
+11:25:18.056 -> Glucose - Timestamp:   476259
+11:25:18.056 -> Glucose - DisplayOnly: false
+11:25:18.103 -> Glucose - Glucose:     1
+11:25:18.103 -> Glucose - State:       1
+11:25:18.103 -> Glucose - Trend:       127
+11:25:18.103 -> ControlSendValue - Writing Data = 2E AC C5 
+11:25:18.103 -> indicateControlCallback - read 16 byte data: 2F 83 63 44 7 0 FD 27 0 0 91 27 0 0 96 1C 
+11:25:18.103 -> ControlWaitToReceiveValue = 2F 83 63 44 7 0 FD 27 0 0 91 27 0 0 96 1C 
+11:25:18.103 -> Sensor - Status:     131
+11:25:18.103 -> Sensor - Timestamp:  476259
+11:25:18.103 -> Sensor - Unfiltered: 10237
+11:25:18.103 -> Sensor - Filtered:   10129
+11:25:18.149 -> ControlSendValue - Writing Data = 32 11 16 
+11:25:18.149 -> indicateControlCallback - read 20 byte data: 33 83 0 14 0 58 2 14 0 58 2 0 0 0 0 0 0 1 B5 EC 
+11:25:18.149 -> ControlWaitToReceiveValue = 33 83 0 14 0 58 2 14 0 58 2 0 0 0 0 0 0 1 B5 EC 
+11:25:18.149 -> Calibration - Glucose:   0
+11:25:18.149 -> Calibration - Timestamp: 0
+11:25:18.149 -> Initiating a disconnect.
+11:25:18.149 -> ControlSendValue - Writing Data = 9 
+11:25:18.243 -> onDisconnect
+11:25:18.243 -> Going to hibernation sleep mode now.
