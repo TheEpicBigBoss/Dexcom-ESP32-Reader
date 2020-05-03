@@ -117,6 +117,11 @@ bool readTimeMessage()
                                                                          currentTime / (60*60*24),                      // Days round down
                                                                          (currentTime / (60*60)) % 24);                 // Remaining hours
     SerialPrintf(DATA, "Time - since session start: %d\n", sessionStartTime);                                           // Session start = Activation date + sessionStartTime * 1000
+
+    if(status == 0x81)                                                                                                  // readTimeMessage is first request where we get the status code
+        SerialPrintln(DEBUG, "\nWARNING - Low Battery\n");                                                              // So show a message when low battery / expired.
+    if(status == 0x83)
+        SerialPrintln(DEBUG, "\nWARNING - Transmitter Expired\n");
     transmitterStartTime = currentTime;
     return true;
 }
@@ -183,6 +188,12 @@ bool readGlucose()
     uint16_t glucose = glucoseBytes & 0xfff;
     uint8_t state = (uint8_t)glucoseRxMessage[12];
     int trend = (int)glucoseRxMessage[13];
+    if(state != 0x06)                                                                                                   // Not the ok state -> exit
+    {
+        SerialPrintf(ERROR, "\nERROR - Session Status / State NOT OK (%d)!\n", state);
+        ExitState("ERROR - We will not continue due to safety reasons (warmup, stopped, waiting for calibration(s), failed or expired.\n");
+    }
+
     SerialPrintf(DATA, "Glucose - Status:      %d\n", status);
     SerialPrintf(DATA, "Glucose - Sequence:    %d\n", sequence);
     SerialPrintf(DATA, "Glucose - Timestamp:   %d\n", timestamp);                                                       // Seconds since transmitter activation
