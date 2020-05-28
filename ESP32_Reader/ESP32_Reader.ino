@@ -9,10 +9,11 @@
  * - espressif v1.0.4  (https://dl.espressif.com/dl/package_esp32_index.json)
  * - Arduino Studio 1.8.10
  * - Dexcom G6 Transmitter 81xxxx (Model: SW11163, Firmware: 1.6.5.25 / 1.6.13.139)
+ * - Dexcom G6 Plus Transmitter 8Gxxxx (unknown)
  * 
  * Author: Max Kaiser
  * Copyright (c) 2020
- * 12.04.2020
+ * 28.05.2020
  */
 
 #include "BLEDevice.h"
