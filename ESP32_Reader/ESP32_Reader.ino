@@ -82,7 +82,7 @@ static BLEClient* pClient = NULL;                                               
 class MyClientCallback : public BLEClientCallbacks
 {
     /**
-     * This function sets the ESP to hibernation mode with the lowest power consumption of ~10uA.
+     * This function sets the ESP to deep sleep mode with a power consumption of ~10uA.
      */
     void sleepHibernation()
     {

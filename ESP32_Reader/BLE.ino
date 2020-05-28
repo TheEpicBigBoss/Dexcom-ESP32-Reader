@@ -69,11 +69,11 @@ bool registerForNotification(notify_callback _callback, BLERemoteCharacteristic 
 }
 
 /**
- * Register for notification AND indication, without checking.
+ * Register for indication AND notification, without checking.
  */
 bool forceRegisterNotificationAndIndication(notify_callback _callback, BLERemoteCharacteristic *pBLERemoteCharacteristic, bool isNotify)
 {
-    pBLERemoteCharacteristic->registerForNotify(_callback, isNotify);                                                   // Register first for notification/indication (because this is the correct one)
+    pBLERemoteCharacteristic->registerForNotify(_callback, isNotify);                                                   // Register first for indication(/notification) (because this is the correct one)
     pBLERemoteCharacteristic->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)bothOn, 2, true);         // True to wait for acknowledge, set to both, manually set the bytes because there is no such funktion to set both.
     SerialPrint(DEBUG, " - FORCE registered for indicate and notify on UUID: ");
     SerialPrintln(DEBUG, pBLERemoteCharacteristic->getUUID().toString().c_str());
