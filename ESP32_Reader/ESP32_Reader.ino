@@ -79,7 +79,7 @@ static BLEUUID        modelUUID("2A24"); // READ
 static BLEUUID     firmwareUUID("2A26"); // READ
 
 
-static std::string transmitterID = "8PC1UW";              /* Set here your transmitter ID */                            // This transmitter ID is used to identify our transmitter if multiple dexcom transmitters are found.
+static std::string transmitterID = "*******";              /* Set here your transmitter ID */                            // This transmitter ID is used to identify our transmitter if multiple dexcom transmitters are found.
 static boolean useAlternativeChannel = true;      /* Enable when used concurrently with xDrip / Dexcom CGM */           // Tells the transmitter to use the alternative bt channel.
 static boolean bonding = false;                                                                                         // Gets set by Auth handshake "StatusRXMessage" and shows if the transmitter would like to bond with the client.
 static boolean force_rebonding = false;               /* Enable when problems with connecting */                        // When true: disables bonding before auth handshake. Enables bonding after successful authenticated (and before bonding command) so transmitter then can initiate bonding.
@@ -315,7 +315,7 @@ void BootScreen(){
   ePaper->setTextColor(GxEPD_BLACK);
   ePaper->update();
 }
-void epaperoutput(int glucose,int timestamp, int status, int trend){
+void epaperoutput(float glucose,int timestamp, int status, int trend){
   float glucosemmol; 
   glucosemmol= glucose/18;
   int timestampdays;
