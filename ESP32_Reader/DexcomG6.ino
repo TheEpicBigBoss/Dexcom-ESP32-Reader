@@ -201,7 +201,7 @@ bool readGlucose()
     SerialPrintf(GLUCOSE, "Glucose - Glucose:     %d\n", glucose);
     SerialPrintf(DATA, "Glucose - State:       %d\n", state);
     SerialPrintf(DATA, "Glucose - Trend:       %d\n", trend);
-
+    epaperoutput(glucose,timestamp, status, trend);
     if(saveLastXValues > 0)                                                                                             // Array is big enouth for min one value.
     {
         for(int i = saveLastXValues - 1; i > 0; i--)                                                                    // Shift all old values back to set the newest to position 0.
