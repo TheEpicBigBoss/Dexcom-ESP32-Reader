@@ -20,6 +20,43 @@
 #include "BLEScan.h"
 #include "Output.h"
 
+//Display
+#include "config.h"
+#include "FreeMonoBold30pt7b.h"
+#include "FreeMonoBold35pt7b.h"
+#include "FreeMonoBold40pt7b.h"
+
+const int16_t arrow_pos_x = 10;
+const int16_t arrow_pos_y = 110;
+const int16_t value_pos_x = 80;
+const int16_t value_pos_y = 150;
+const int utcOffset = 1;        // Central European Time
+extern const unsigned char logoIcon[280];
+
+U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
+TTGOClass *twatch = nullptr;
+GxEPD_Class *ePaper = nullptr;
+PCF8563_Class *rtc = nullptr;
+AXP20X_Class *power = nullptr;
+Button2 *btn = nullptr;
+uint32_t seupCount = 0;
+bool pwIRQ = false;
+bool touch_vaild = false;
+uint32_t loopMillis = 0;
+int16_t x, y;
+
+void setupDisplay()
+{
+    u8g2Fonts.begin(*ePaper); // connect u8g2 procedures to Adafruit GFX
+    u8g2Fonts.setFontMode(1);                   // use u8g2 transparent mode (this is default)
+    u8g2Fonts.setFontDirection(0);              // left to right (this is default)
+    u8g2Fonts.setForegroundColor(GxEPD_BLACK);  // apply Adafruit GFX color
+    u8g2Fonts.setBackgroundColor(GxEPD_WHITE);  // apply Adafruit GFX color
+    u8g2Fonts.setFont(u8g2_font_inr38_mn); // select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
+}
+
+//END
+
 #define STATE_START_SCAN 0                                                                                              // Set this state to start the scan.
 #define STATE_SCANNING   1                                                                                              // Indicates the esp is currently scanning for devices.
 #define STATE_SLEEP      2                                                                                              // Finished with reading data from the transmitter.
@@ -42,7 +79,7 @@ static BLEUUID        modelUUID("2A24"); // READ
 static BLEUUID     firmwareUUID("2A26"); // READ
 
 
-static std::string transmitterID = "xxxxxx";              /* Set here your transmitter ID */                            // This transmitter ID is used to identify our transmitter if multiple dexcom transmitters are found.
+static std::string transmitterID = "*******";              /* Set here your transmitter ID */                            // This transmitter ID is used to identify our transmitter if multiple dexcom transmitters are found.
 static boolean useAlternativeChannel = true;      /* Enable when used concurrently with xDrip / Dexcom CGM */           // Tells the transmitter to use the alternative bt channel.
 static boolean bonding = false;                                                                                         // Gets set by Auth handshake "StatusRXMessage" and shows if the transmitter would like to bond with the client.
 static boolean force_rebonding = false;               /* Enable when problems with connecting */                        // When true: disables bonding before auth handshake. Enables bonding after successful authenticated (and before bonding command) so transmitter then can initiate bonding.
@@ -264,12 +301,80 @@ bool readDeviceInformations()
     return true;
 }
 
+void BootScreen(){
+   ePaper->setRotation(1);
+  ePaper->fillScreen(GxEPD_WHITE);
+  ePaper->setTextColor(GxEPD_BLACK);
+  ePaper->setFont(&FreeMonoBold9pt7b);
+//  ePaper->setCursor(0, 15);
+//  ePaper->print("IP: ");
+//  ePaper->println(WiFi.localIP());
+  ePaper->setCursor(0, value_pos_y);
+  ePaper->setFont(&FreeMonoBold35pt7b);
+  ePaper->println("BOOT");
+  ePaper->setTextColor(GxEPD_BLACK);
+  ePaper->update();
+}
+void epaperoutput(float glucose,int timestamp, int status, int trend){
+  float glucosemmol; 
+  glucosemmol= glucose/18;
+  int timestampdays;
+  timestampdays= timestamp/60/60/24;
+  ePaper->setRotation(1);
+  ePaper->fillScreen(GxEPD_WHITE);
+  ePaper->setTextColor(GxEPD_BLACK);
+  ePaper->setFont(&FreeMonoBold9pt7b);
+  ePaper->setCursor(0, 15);
+  ePaper->print("Tag: ");
+  ePaper->print(timestampdays);
+  ePaper->print(" Trend: ");
+  ePaper->println(trend);
+  ePaper->print("Status: ");
+  ePaper->println(status);
+  ePaper->setCursor(value_pos_x, value_pos_y);
+  ePaper->setFont(&FreeMonoBold35pt7b);
+  ePaper->println(glucosemmol);
+  ePaper->setTextColor(GxEPD_BLACK);
+  ePaper->update();
+}
 /**
  * Method to check the reason the ESP woke up or was started.
  */
 void wakeUpRoutine() 
 {
     esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+
+    // Get watch object
+    twatch = TTGOClass::getWatch();
+
+    twatch->begin();
+
+    rtc = twatch->rtc;
+
+    power = twatch->power;
+
+    btn = twatch->button;
+
+    ePaper = twatch->ePaper;
+
+    // Use compile time as RTC input time
+    rtc->check();
+
+    // Turn on power management button interrupt
+    power->enableIRQ(AXP202_PEK_SHORTPRESS_IRQ, true);
+
+    // Clear power interruption
+//    power->clearIRQ();
+
+    // Set MPU6050 to sleep
+//    twatch->mpu->setSleepEnabled(true);
+
+    // Set Pin to interrupt
+    pinMode(AXP202_INT, INPUT_PULLUP);
+    attachInterrupt(AXP202_INT, [] {
+        pwIRQ = true;
+    }, FALLING);
+    
     switch(wakeup_reason)
     {
         case ESP_SLEEP_WAKEUP_TIMER :
@@ -309,6 +414,9 @@ void setup()
 {
     Serial.begin(115200);
     wakeUpRoutine();
+    
+// Initialize the ink screen
+    setupDisplay();
     SerialPrintln(DEBUG, "Starting ESP32 dexcom client application...");
     BLEDevice::init("");
 
@@ -316,7 +424,7 @@ void setup()
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());                                          // Set the callback to informed when a new device was detected.
     pBLEScan->setInterval(100); //100 works                                                                             // The time in ms how long each search intervall last. Important for fast scanning so we dont miss the transmitter waking up.
     pBLEScan->setWindow(99); //60-99 works                                                                              // The actual time that will be searched. Interval - Window = time the esp is doing nothing (used for energy efficiency).
-    pBLEScan->setActiveScan(false);                                                                                     // Possible source of error if we cant connect to the transmitter.
+    pBLEScan->setActiveScan(true);                                                                                     // Possible source of error if we cant connect to the transmitter.
 }
 
 /**
@@ -395,7 +503,7 @@ void loop()
     switch (Status)
     {
         case STATE_START_SCAN:
-          BLEDevice::getScan()->start(0, true);                                                                         // false = maybe helps with connection problems.
+          BLEDevice::getScan()->start(0, false);                                                                         // false = maybe helps with connection problems.
           Status = STATE_SCANNING;
           break;
 
